@@ -9,6 +9,7 @@ import urllib.request
 from pathlib import Path
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from .policy import check_suppression
+from .retry import retry
 
 def b64(data):
     return base64.urlsafe_b64encode(data).decode().rstrip('=')
@@ -60,6 +61,8 @@ class Dashboard:
         if git('diff','--cached','--name-only').strip():
             git('commit','-m','Publish encrypted IELTS results [skip ci]')
             git('push','origin',f"HEAD:{os.environ['GRADING_DEFAULT_BRANCH']}")
+        # GITHUB_TOKEN pushes do not trigger Pages; explicitly request a build, also on retries.
+        self.request_pages_build()
         expected = target.read_bytes()
         url = f'{self.settings.dashboard_base_url}/dashboard_data/{profile}.json'
         last_error = None
@@ -75,6 +78,20 @@ class Dashboard:
                 last_error=type(exc).__name__
             time.sleep(10)
         raise RuntimeError(f'Live dashboard not yet verified ({last_error or "stale deployment"}); resume delivery next run')
+
+    def request_pages_build(self):
+        repository=os.environ.get('GITHUB_REPOSITORY','')
+        token=os.environ.get('GITHUB_TOKEN','')
+        if not token or repository.count('/')!=1:
+            raise ValueError('GitHub Pages publishing requires repository identity and scoped workflow token')
+        request=urllib.request.Request(f'https://api.github.com/repos/{repository}/pages/builds',
+            method='POST',data=b'',headers={'Authorization':'Bearer '+token,
+                'Accept':'application/vnd.github+json','X-GitHub-Api-Version':'2022-11-28'})
+        def submit():
+            with urllib.request.urlopen(request,timeout=30) as response:
+                if response.status!=201:
+                    raise RuntimeError('Pages build request was not accepted')
+        retry(submit)
 
     def verify_ui(self, payload):
         from playwright.sync_api import sync_playwright

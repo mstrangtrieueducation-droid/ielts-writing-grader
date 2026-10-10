@@ -26,6 +26,8 @@ Mã nguồn chấm vở, sổ từ vựng, bài viết homework và PDF kiểm t
 
 `dashboard.py`, `delivery.py`: mã hóa, commit/push, đọc lại tệp Pages thực tế, mở trình duyệt headless kiểm tra thẻ bài và việc ẩn chi tiết, rồi mới ghi Toàn diện. Scan chỉ được chuyển sang processed sau tất cả bước đó.
 
+Commit do `GITHUB_TOKEN` tạo không tự kích hoạt build Pages. Publisher gọi API yêu cầu build với quyền `pages: write`, rồi xác minh tệp thực tế; không dựa vào việc push thành công để báo đã đăng. Xem https://docs.github.com/en/actions/concepts/security/github_token .
+
 `announcements.py`: chỉ tạo bản Zalo khi toàn bộ roster đã có kết quả dashboard/Toàn diện được xác minh. Lưu bản nhắn trong thư mục Drive riêng; không tự gửi Zalo.
 
 ## Cấu hình GitHub

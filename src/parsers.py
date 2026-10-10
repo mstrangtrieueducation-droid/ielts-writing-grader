@@ -18,7 +18,8 @@ def parse_filename(filename):
     if not match:
         raise ValueError('Scan filename must be IELTSnn_Full Student Name_TaskCode.pdf')
     classroom, student, code = match.groups()
-    return f'IELTS {int(re.search(r"\d+", classroom).group())}', student.replace('_', ' '), code.upper()
+    class_number=int(re.search(r'\d+',classroom).group())
+    return f'IELTS {class_number}', student.replace('_', ' '), code.upper()
 
 def match_student(name, roster, aliases):
     resolved = aliases.get(name, name)
