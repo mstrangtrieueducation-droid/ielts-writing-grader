@@ -147,6 +147,16 @@ class EssayResult(Strict):
     collocations: list[Collocation] = Field(min_length=4, max_length=6)
     band_scores: dict[str, float] = Field(default_factory=dict)
 
+class NumericCheck(Strict):
+    original_claim: str = Field(min_length=1)
+    verdict: Literal['accurate', 'incorrect', 'imprecise', 'ambiguous']
+    evidence: str = Field(min_length=5)
+    correction_quote: str
+
+class FlashTask1Result(EssayResult):
+    # Private QA evidence, not an extra student-facing checklist/card.
+    numeric_checks: list[NumericCheck]
+
 class QualityReview(Strict):
     approved: bool
     issues: list[str]

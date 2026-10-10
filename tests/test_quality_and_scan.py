@@ -69,6 +69,35 @@ def test_one_pass_validated_checkpoint_reused_without_model(binding,settings):
     grade_essay(AI(),settings,binding.essays[0],original,[],checkpoint=checkpoints.append)
     assert grade_essay(None,settings,binding.essays[0],original,[],pending=checkpoints[-1]).word_count==260
 
+def test_task1_requires_numeric_coverage_and_linked_corrections(binding,settings):
+    from src.schemas import FlashTask1Result,NumericCheck
+    from src.graders.essay_grader import validate_essay
+    spec=binding.essays[0].model_copy(update={'task':1,'ground_truth':'A=90; B=93'})
+    original='A and B exceed 90%.'
+    base=essay(original,spec).model_dump()
+    claim={'original_claim':original,'verdict':'incorrect','evidence':'A is exactly 90%; B is 93%.','correction_quote':original}
+    result=FlashTask1Result(**base,numeric_checks=[claim])
+    with pytest.raises(ValueError,match='lacks corresponding correction'):
+        validate_essay(result,original,spec)
+    from src.schemas import Correction
+    result.corrections=[Correction(section='Body',original=original,error='Equality invalidates exceeding.',suggested='A and B are at least 90%.')]
+    assert validate_essay(result,original,spec).numeric_checks[0].verdict=='incorrect'
+    result.numeric_checks=[]
+    with pytest.raises(ValueError,match='every original numeral'):
+        validate_essay(result,original,spec)
+    result.numeric_checks=[NumericCheck(**claim)]
+    class AI:
+        calls=0
+        def structured(self,model,prompt,schema,attachments):
+            self.calls+=1
+            assert schema is FlashTask1Result and not attachments
+            assert 'not >=' in prompt and 'mathematically true but loose' in prompt
+            return result
+    checkpoints=[];ai=AI()
+    grade_essay(ai,settings,spec,original,[],checkpoint=checkpoints.append)
+    assert isinstance(grade_essay(None,settings,spec,original,[],pending=checkpoints[-1]),FlashTask1Result)
+    assert ai.calls==1
+
 def test_unresolved_legacy_review_preserved_without_regeneration(binding,settings):
     original=' '.join(['word']*260)
     from src.parsers import digest

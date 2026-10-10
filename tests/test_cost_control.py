@@ -25,6 +25,21 @@ def test_durable_class_budget_across_jobs_and_restarts(binding):
     budget.received(key,'{}',{'prompt_token_count':3000,'candidates_token_count':1000,'thoughts_token_count':1000})
     assert ClassBudget(store,binding,{'job_id':'first'}).existing(key)['accounted_vnd']==780
 
+def test_explicit_trial_ceiling_is_durable_and_job_scoped(binding):
+    drive=FakeDrive();store=StateStore(drive,'state')
+    job={'job_id':'bounded','trial_cost_ceiling_vnd':2000}
+    first=ClassBudget(store,binding,job)
+    key=first.key('first')
+    first.reserve(key,'gemini-3.8-flash',3000,8192)
+    first.received(key,'{}',{'prompt_token_count':3000,'candidates_token_count':3000,'thoughts_token_count':4000})
+    second=ClassBudget(store,binding,job)
+    second.reserve(second.key('second'),'gemini-3.8-flash',3000,8192)
+    third=ClassBudget(store,binding,job)
+    with pytest.raises(ValueError,match='trial cost ceiling'):
+        third.reserve(third.key('third'),'gemini-3.8-flash',3000,8192)
+    other=ClassBudget(store,binding,{'job_id':'other','trial_cost_ceiling_vnd':900})
+    other.reserve(other.key('different'),'gemini-3.8-flash',3000,8192)
+
 def service(binding,monkeypatch,response=None,error=None):
     monkeypatch.setenv('GEMINI_GENERATION_ENABLED','true')
     drive=FakeDrive();store=StateStore(drive,'state')

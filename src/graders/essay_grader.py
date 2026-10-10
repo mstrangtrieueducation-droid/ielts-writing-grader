@@ -1,6 +1,6 @@
 import json
 import re
-from ..schemas import EssayResult, Transcription, QualityReview
+from ..schemas import EssayResult, FlashTask1Result, Transcription, QualityReview
 from ..parsers import word_count, essay_paragraphs, digest
 from ..media import validate_page_audit, validate_references
 
@@ -39,6 +39,25 @@ In taught_application_vi cite the student's actual phrase/paragraph, explain wha
 missed and the necessary next step. Never substitute generic praise or a generic error checklist
 for individual feedback. Uncertain evidence stays held; never manufacture an error to sound strict.'''
 
+NUMERICAL_AUDIT = '''For Task1 complete numeric_checks for EVERY numeral occurrence in the original,
+including ranking/year figures and values quoted inside comparisons. Use original_claim copied
+verbatim with enough context, evidence specifying the real group/category/value from ground truth,
+and verdict accurate/incorrect/imprecise/ambiguous. For incorrect/imprecise/ambiguous claims,
+correction_quote must identify a corresponding correction explaining that same issue.
+Strict inequalities: exceeding/over/more than/above mean >, not >=; below/less than mean <.
+Check EVERY group in 'both', 'all', 'across X and Y', not just one. Equality invalidates a strict
+comparison. At least and no less than mean >=; not exceeding/no more than/not surpassing mean <=.
+A mathematically true but loose upper bound is NOT a wrong number: classify imprecise and recommend
+more specific observed values. Do not demand every boundary number equal a table cell.
+Check respectively has a clearly named matching group order; check higher/lower says compared with
+which group, and lowest/highest identifies within which category rather than implying a false global
+minimum/maximum. Fix all numerical implications consistently in suggestions AND the final revision.
+Before completing the JSON, compare numeric_checks and corrections one-to-one: do not silently
+repair numerical errors only in the revision, retain incorrect inequalities in suggestions, or
+replace them with a different ambiguous extreme claim. Do not label a missing subject/category
+label as a missing grammatical subject when the clause already has a subject. Separate actual
+grammar errors, numerical errors, imprecision and optional improvements.'''
+
 def source_quote(quote, original):
     if quote in original:
         return quote
@@ -74,6 +93,18 @@ def validate_essay(result, original, spec, assessment=False):
     upgraded = '\n\n'.join(''.join(s.text for s in paragraph) for paragraph in result.upgraded_paragraphs)
     if word_count(upgraded) < minimum:
         raise ValueError('Upgraded essay below required word count')
+    if isinstance(result,FlashTask1Result):
+        covered=[]
+        for check in result.numeric_checks:
+            check.original_claim=source_quote(check.original_claim,original)
+            covered.extend((m.start(),m.end()) for m in re.finditer(re.escape(check.original_claim),original))
+            if check.verdict!='accurate':
+                check.correction_quote=source_quote(check.correction_quote,original)
+                if not any(check.correction_quote in c.original or c.original in check.correction_quote for c in result.corrections):
+                    raise ValueError('Numerical audit issue lacks corresponding correction')
+        if any(not any(a<=m.start() and b>=m.end() for a,b in covered)
+            for m in re.finditer(r'\b\d+(?:[.,]\d+)?%?',original)):
+            raise ValueError('Numerical audit does not cover every original numeral')
     return result
 
 def transcribe(ai, settings, binding, files, counts):
@@ -102,6 +133,9 @@ def grade_essay(ai, settings, spec, original, reference_files, assessment=False,
     count = word_count(original)
     paragraphs = len(essay_paragraphs(original))
     prompt = RUBRIC + '\nTRUSTED SPECIFICATION:\n' + spec.model_dump_json()
+    schema=FlashTask1Result if spec.task==1 else EssayResult
+    if spec.task==1:
+        prompt+='\n'+NUMERICAL_AUDIT+'\n'
     prompt += f'\nassessment={assessment}; verified word_count={count}; paragraph_count={paragraphs}\n'
     prompt += 'Keep the verified counts unchanged. Form paragraphs may use a single newline, with no blank line.\n'
     prompt += 'UNTRUSTED STUDENT ESSAY JSON:\n' + json.dumps(original,ensure_ascii=False)
@@ -112,7 +146,10 @@ def grade_essay(ai, settings, spec, original, reference_files, assessment=False,
         if pending.get('source_digest')!=source_digest:
             raise ValueError('Pending essay review does not match frozen original/specification')
         if pending.get('status') in ('received','validated'):
-            result=validate_essay(EssayResult.model_validate(pending['result']),original,spec,assessment)
+            # Replay the saved schema without requiring or generating a new audit
+            # for legacy results that predate the numerical coverage contract.
+            saved_schema=FlashTask1Result if 'numeric_checks' in pending['result'] else EssayResult
+            result=validate_essay(saved_schema.model_validate(pending['result']),original,spec,assessment)
             if checkpoint and pending['status']=='received':
                 checkpoint({**pending,'status':'validated','result':result.model_dump(mode='json')})
             return result
@@ -125,7 +162,7 @@ def grade_essay(ai, settings, spec, original, reference_files, assessment=False,
     if checkpoint:
         checkpoint(work.copy())  # Durable BEFORE the charge; a crash cannot auto-regenerate.
     try:
-        result=ai.structured(settings.essay_model,prompt,EssayResult,())
+        result=ai.structured(settings.essay_model,prompt,schema,())
         work.update(status='received',result=result.model_dump(mode='json'))
         if checkpoint:
             checkpoint(work.copy())
