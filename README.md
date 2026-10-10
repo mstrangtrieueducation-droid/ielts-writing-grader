@@ -121,6 +121,8 @@ Body `{"event_type":"new_scan_uploaded"}` hoặc `{"event_type":"on_form_submit"
 
 Kết nối repo/API/billing và lượt thử riêng không đồng nghĩa đã bật chấm toàn bộ. Chỉ bật `GRADING_ENABLED` sau khi nghiệm thu chất lượng và giao kết quả; trạng thái triển khai thật phải đọc từ cấu hình và bằng chứng chạy. Không tạo thêm automation trong Codex khi workflow chưa được nghiệm thu.
 
+Lượt thử trả phí được Cô chỉ định riêng dùng manual `mode=pilot`, `authorized_flash_trial=true` và `PILOT_SELECTION_JSON` giới hạn đúng một học sinh. Điều này không bật hai biến generation/schedule toàn cục. Sau khi đối chiếu bài gốc/số liệu và lưu bằng chứng chất lượng gắn SHA256 của payload, `mode=deliver-pilot` chỉ đăng kết quả đã duyệt, không gọi chấm lại. Không duyệt payload lỗi để có kết quả đăng; một lượt thử chưa chứng minh chất lượng cho mọi đề/lớp.
+
 ## Kiểm thử và vận hành
 
 ```sh

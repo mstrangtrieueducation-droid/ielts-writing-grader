@@ -157,6 +157,9 @@ class Pipeline:
                     state['payload']=self.payload(binding,student,source,'notebook_failed',reasons)
                     self.store.save(state)
                     return
+                if binding.assignment_type=='homework':
+                    received_day=parse_receipt(source['received_at']).strftime('%d/%m/%Y')
+                    notebook_summary=f'Đã ghi nhận vở nộp ngày {received_day} — Đạt yêu cầu.'
             if binding.assignment_type in ('notebook','vocabulary'):
                 state['payload']=self.payload(binding,student,source,'graded',notebook_summary)
                 self.store.save(state)

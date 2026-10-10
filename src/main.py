@@ -18,6 +18,7 @@ def main(argv=None):
     parser.add_argument('--validate-config',type=Path,help='Validate local binding JSON without network/model calls')
     parser.add_argument('--preflight',action='store_true',help='Read configuration and check API/model access without grading')
     parser.add_argument('--pilot',action='store_true',help='Grade exact private selection without publishing feedback')
+    parser.add_argument('--deliver-pilot',action='store_true',help='Publish an approved saved pilot without model generation')
     args=parser.parse_args(argv)
     if args.validate_config:
         records=json.loads(args.validate_config.read_text(encoding='utf-8-sig'))
@@ -43,6 +44,11 @@ def main(argv=None):
         return 0
     ai.audit=lambda data:state_drive.write_json(settings.state_folder,'attempt-'+uuid.uuid4().hex+'.json',data)
     pipeline=Pipeline(settings,sheets,drive,ai,StateStore(state_drive,settings.state_folder),Dashboard(settings))
+    if args.deliver_pilot:
+        from .pilot import deliver_pilot
+        report=deliver_pilot(pipeline,bindings,json.loads(os.environ['PILOT_SELECTION_JSON']))
+        print(json.dumps(report,ensure_ascii=False))
+        return 0
     if args.pilot:
         from .pilot import run_pilot
         report=run_pilot(pipeline,bindings,json.loads(os.environ['PILOT_SELECTION_JSON']))

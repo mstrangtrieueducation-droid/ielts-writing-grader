@@ -14,6 +14,31 @@ def test_selection_requires_verified_binding():
     with pytest.raises(ValueError,match='not verified'):
         selected_binding([],{'class_name':'IELTS 48','task_code':'W14','student_ids':['1']})
 
+def test_selection_paid_trial_rejects_multiple_students(binding):
+    with pytest.raises(ValueError,match='exactly one'):
+        selected_binding([binding],{'class_name':binding.class_name,'task_code':binding.task_code,'student_ids':['1','2']})
+
+def test_deliver_saved_pilot_requires_exact_quality_approval_without_model(binding,settings):
+    from test_pipeline import components
+    from src.pilot import deliver_pilot,payload_digest
+    from conftest import essay
+    pipeline,drive,sheets,dashboard,store=components(settings,[['Time','Name','Notes','Essay'],['09/10/2026 23:00:00','Nguyễn Test','notebook_file_123','Essay']])
+    student,source=pipeline.sources(binding,pipeline.sheets.roster(None,None))[0]
+    state=store.begin(binding,student,source)
+    state['payload']=pipeline.payload(binding,student,source,'graded','Vở đạt yêu cầu.',[essay('Essay',binding.essays[0]).model_dump(mode='json')])
+    selection={'class_name':binding.class_name,'task_code':binding.task_code,'student_ids':['S1']}
+    with pytest.raises(ValueError,match='quality verification'):
+        deliver_pilot(pipeline,[binding],selection)
+    state['pilot_review']={'status':'approved','delivery_authorized':True,'quality_evidence':'Independent comparison with original/chart',
+        'approved_payload_sha256':payload_digest(state['payload'])}
+    pipeline.grade=lambda *_:(_ for _ in ()).throw(AssertionError('No generation on delivery'))
+    state['payload']['warning']='Changed after approval'
+    with pytest.raises(ValueError,match='payload changed'):
+        deliver_pilot(pipeline,[binding],selection)
+    state['pilot_review']['approved_payload_sha256']=payload_digest(state['payload'])
+    report=deliver_pilot(pipeline,[binding],selection)
+    assert report['delivered']==1 and report['model_generation_calls']==0 and state['phase']=='complete'
+
 def test_pilot_stages_actual_result_without_delivery(binding,settings,monkeypatch):
     from test_pipeline import components
     from conftest import notebook,essay

@@ -7,8 +7,12 @@ on:
       mode:
         description: 'Validate access first, or run grading'
         type: choice
-        options: [preflight, pilot, grade]
+        options: [preflight, pilot, deliver-pilot, grade]
         default: preflight
+      authorized_flash_trial:
+        description: 'Explicitly authorized bounded Flash pilot; leaves scheduled generation off'
+        type: boolean
+        default: false
   repository_dispatch:
     types: [new_scan_uploaded, on_form_submit]
 permissions:
@@ -25,7 +29,7 @@ jobs:
     timeout-minutes: 120
     env:
       GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-      GEMINI_GENERATION_ENABLED: ${{ vars.GEMINI_GENERATION_ENABLED }}
+      GEMINI_GENERATION_ENABLED: ${{ inputs.mode == 'pilot' && inputs.authorized_flash_trial && 'true' || vars.GEMINI_GENERATION_ENABLED }}
       GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
       GOOGLE_STATE_OAUTH_JSON: ${{ secrets.GOOGLE_STATE_OAUTH_JSON }}
       DASHBOARD_MASTER_KEY: ${{ secrets.DASHBOARD_MASTER_KEY }}
@@ -67,3 +71,6 @@ jobs:
       - name: Grade selected real pilot privately
         if: github.event_name == 'workflow_dispatch' && inputs.mode == 'pilot'
         run: python -m src.main --pilot
+      - name: Deliver approved saved pilot without generation
+        if: github.event_name == 'workflow_dispatch' && inputs.mode == 'deliver-pilot'
+        run: python -m src.main --deliver-pilot

@@ -1,5 +1,8 @@
 """A real, explicitly selected grading attempt, staged privately before delivery."""
 import json
+from .parsers import digest
+from .schemas import Binding
+from .delivery import deliver
 from .policy import eligible_binding,receipt_allowed
 from .parsers import parse_receipt
 
@@ -9,6 +12,8 @@ def selected_binding(bindings, selection):
     ids=selection['student_ids']
     if not isinstance(ids,list) or not ids or len(ids)!=len(set(ids)):
         raise ValueError('Pilot student IDs must be explicit and unique')
+    if len(ids)!=1:
+        raise ValueError('A paid pilot is bounded to exactly one student')
     found=[b for b in bindings if b.class_name==selection['class_name'] and b.task_code==selection['task_code']]
     if len(found)!=1 or not eligible_binding(found[0]):
         raise ValueError('Pilot binding is absent, ambiguous or not verified')
@@ -57,4 +62,42 @@ def run_pilot(pipeline, bindings, selection):
         report['notebook_failed']+=state['payload']['state']=='notebook_failed'
         report['job_ids'].append(jid)
     pipeline.store.drive.write_json(pipeline.store.folder,'pilot-'+binding.class_name.replace(' ','-')+'-'+binding.task_code+'.json',report)
+    return report
+
+def payload_digest(payload):
+    return digest(json.dumps(payload,ensure_ascii=False,sort_keys=True))
+
+def deliver_pilot(pipeline,bindings,selection):
+    binding=selected_binding(bindings,selection)
+    spreadsheet=pipeline.settings.class_sheets[binding.class_name]
+    roster=pipeline.sheets.roster(spreadsheet,binding)
+    sources=pipeline.sources(binding,roster)
+    if pipeline.discovery_errors:
+        raise ValueError('Unresolved identity/receipt prevents pilot delivery')
+    report={'delivered':0,'model_generation_calls':0,'tracker_verified':0}
+    for sid in selection['student_ids']:
+        found=[(s,source) for s,source in sources if s['id']==sid]
+        if len(found)!=1:
+            raise ValueError('Selected pilot source absent/ambiguous')
+        student,source=found[0]
+        state=pipeline.store.jobs.get(pipeline.store.identity(binding,student))
+        if not state or not state.get('payload'):
+            raise ValueError('No saved completed pilot result')
+        review=state.get('pilot_review',{})
+        if review.get('status')!='approved' or not review.get('delivery_authorized') or not review.get('quality_evidence'):
+            raise ValueError('Pilot requires source-based quality verification before delivery')
+        if review.get('approved_payload_sha256')!=payload_digest(state['payload']):
+            raise ValueError('Approved payload changed; do not deliver')
+        frozen=Binding.model_validate(state['binding'])
+        if frozen!=binding or source!=state['source'] or not receipt_allowed(binding,parse_receipt(source['received_at'])):
+            raise ValueError('Pilot frozen binding/source/receipt changed')
+        if state['payload']['state']!='graded' or len(state['payload']['essays'])!=len(binding.essays):
+            raise ValueError('Pilot must contain all assigned exercises before delivery')
+        if pipeline.store.locked_notebook(binding,student):
+            raise ValueError('Notebook locked; do not publish essays')
+        # No call to grade(): publication strictly reuses approved saved results.
+        deliver(state,binding,student,pipeline.dashboard,pipeline.sheets,pipeline.store,
+            spreadsheet,pipeline.drive,pipeline.settings)
+        report['delivered']+=1
+        report['tracker_verified']+=bool(state.get('tracker_evidence',{}).get('exact_readback'))
     return report
