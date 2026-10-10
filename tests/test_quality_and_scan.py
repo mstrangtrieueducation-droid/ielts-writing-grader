@@ -1,5 +1,6 @@
 import pytest
 from src.graders.essay_grader import grade_essay
+from src.graders.essay_grader import source_quote
 from src.schemas import EssayResult, QualityReview
 from src.parsers import essay_paragraphs
 import src.pipeline as module
@@ -14,6 +15,13 @@ def test_form_single_newline_paragraphs_preserve_four_paragraphs():
 
 def test_blank_line_paragraphs_allow_wrapped_lines():
     assert len(essay_paragraphs('Introduction\nwrapped line.\n\nOverview.\n\nDetail one.\n\nDetail two.'))==4
+
+def test_model_quote_recovers_only_unique_source_whitespace():
+    assert source_quote('slightly higher scores','slightly higher  scores')=='slightly higher  scores'
+    with pytest.raises(ValueError,match='absent or ambiguous'):
+        source_quote('slightly higher scores','slightly lower  scores')
+    with pytest.raises(ValueError,match='absent or ambiguous'):
+        source_quote('higher scores','higher  scores; higher   scores')
 
 def test_quality_audit_requires_resolution(binding,settings):
     original=' '.join(['word']*260)

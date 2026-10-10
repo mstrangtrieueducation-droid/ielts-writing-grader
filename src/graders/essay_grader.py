@@ -29,6 +29,19 @@ TR(or TA), CC, LR, GRA band scores0–9 in half-point steps with feedback justif
 For homework band_scores must be empty. All student-facing text must be Vietnamese except essays,
 original quotes, suggestions and collocations.'''
 
+def source_quote(quote, original):
+    if quote in original:
+        return quote
+    # Recover only a unique whitespace-normalized quote from the actual source.
+    # Words, case, punctuation and numbers must be unchanged; ambiguity stays blocked.
+    tokens=re.split(r'\s+',quote.strip())
+    if not tokens or not any(tokens):
+        raise ValueError('Correction quotes text absent from the actual essay')
+    matches=list(re.finditer(r'\s+'.join(re.escape(t) for t in tokens),original))
+    if len(matches)!=1:
+        raise ValueError('Correction quotes text absent or ambiguous in the actual essay')
+    return matches[0].group()
+
 def validate_essay(result, original, spec, assessment=False):
     if result.exercise != spec.exercise or result.original != original:
         raise ValueError('Original essay/exercise identity changed')
@@ -38,8 +51,7 @@ def validate_essay(result, original, spec, assessment=False):
     if result.paragraph_count != len(paragraphs):
         raise ValueError('Paragraph count differs from source text')
     for item in result.corrections:
-        if item.original not in original:
-            raise ValueError('Correction quotes text absent from the actual essay')
+        item.original=source_quote(item.original,original)
     if assessment:
         required = {'TA' if spec.task == 1 else 'TR', 'CC', 'LR', 'GRA'}
         if set(result.band_scores) != required or any(not 0 <= v <= 9 or v*2 != int(v*2) for v in result.band_scores.values()):
