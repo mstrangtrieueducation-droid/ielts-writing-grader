@@ -9,7 +9,7 @@ def retry(call, attempts=6, sleeper=time.sleep):
             return call()
         except Exception as exc:
             status = getattr(getattr(exc, 'resp', None), 'status', None) or getattr(exc, 'code', None) or getattr(getattr(exc,'response',None),'status_code',None)
-            transient = isinstance(exc, (TimeoutError, ConnectionError, OSError, httpx.TransportError, RequestException)) or status in (408, 429, 500, 502, 503, 504)
+            transient = (status is None and isinstance(exc, (TimeoutError, ConnectionError, OSError, httpx.TransportError, RequestException))) or status in (408, 429, 500, 502, 503, 504)
             if not transient or attempt == attempts - 1:
                 raise
             header = getattr(getattr(exc, 'resp', None), 'get', lambda *_: None)('retry-after')

@@ -1,5 +1,6 @@
 import json
 import pytest
+import urllib.error
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from src.dashboard import Dashboard, unb64
 from src.retry import retry
@@ -30,3 +31,24 @@ def test_transient_retries_and_permanent_no_retry():
     def permanent(): calls.append(1); raise ValueError('invalid config')
     with pytest.raises(ValueError): retry(permanent,sleeper=delays.append)
     assert len(calls)==1
+
+def test_http_403_never_retried_as_network_error():
+    calls=[]
+    def forbidden():
+        calls.append(1)
+        raise urllib.error.HTTPError('https://example.test',403,'Forbidden',{},None)
+    with pytest.raises(urllib.error.HTTPError): retry(forbidden,sleeper=lambda _:None)
+    assert len(calls)==1
+
+def test_pages_build_explicit_scoped_token(settings,monkeypatch):
+    requests=[]
+    class Response:
+        status=201
+        def __enter__(self): return self
+        def __exit__(self,*_): pass
+    def fake_open(request,**kwargs): requests.append(request); return Response()
+    monkeypatch.setenv('GITHUB_REPOSITORY','test-owner/test-repo')
+    monkeypatch.setenv('GITHUB_TOKEN','synthetic-test-token')
+    monkeypatch.setattr('urllib.request.urlopen',fake_open)
+    Dashboard(settings).request_pages_build()
+    assert requests[0].method=='POST' and requests[0].full_url=='https://api.github.com/repos/test-owner/test-repo/pages/builds'
