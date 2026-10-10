@@ -38,6 +38,7 @@ class Binding(Strict):
     form_spreadsheet_id: str = ''
     form_tab: str = ''
     name_column: str = 'B'
+    class_column: str | None = 'C'
     receipt_column: str = 'A'
     notebook_columns: list[str] = Field(default_factory=list)
     essay_columns: dict[int, str] = Field(default_factory=dict)

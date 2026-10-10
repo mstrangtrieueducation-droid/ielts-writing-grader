@@ -106,4 +106,12 @@ class SheetService:
     def has_prior_grading(self, spreadsheet, binding, student):
         column=self.feedback_column(spreadsheet,binding)
         values=self.values(spreadsheet,sheet_range(binding.tracker_tab,f"{column}{student['row']}"))
-        return bool(values and values[0] and START in values[0][0])
+        if not values or not values[0]:
+            return False
+        text=values[0][0]
+        if START in text:
+            return True
+        # The prior tracker reserves an empty teacher section even before grading.
+        # Preserve a populated section; an empty divider is not returned feedback.
+        marker='— NHẬN XÉT GV —'
+        return marker in text and bool(text.split(marker,1)[1].strip())

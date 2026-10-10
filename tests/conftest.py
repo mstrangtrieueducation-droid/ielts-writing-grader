@@ -13,7 +13,7 @@ def binding():
         essays=[{'exercise':1,'task':2,'question':'Discuss the benefits and risks of online communication.',
             'taught_theory':'Explain the causal chain and each assigned argument using taught foundations.',
             'assigned_outline':'Risk with mitigation; business communication benefits.', 'ground_truth':'No chart.'}],
-        form_spreadsheet_id='form123',form_tab='W29',notebook_columns=['C'],essay_columns={1:'D'},
+        form_spreadsheet_id='form123',form_tab='W29',class_column=None,notebook_columns=['C'],essay_columns={1:'D'},
         tracker_header_exact='Writing W29',roster_end_row=7,next_writing_date='2026-10-10',
         next_writing_evidence='dashboard-snapshot-sha256-verified',due_at='2026-10-08T23:59:59+07:00')
 

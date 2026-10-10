@@ -57,3 +57,12 @@ def test_latest_nonblank_exercise_with_own_receipt(binding,settings):
     source=pipeline.sources(binding,pipeline.sheets.roster(None,None))[0][1]
     assert source['essay_texts']['1']=='First essay'
     assert source['exercise_receipts']['1']['form_row']==2
+
+def test_form_filters_other_classes_before_identity_matching(binding,settings):
+    binding=binding.model_copy(update={'class_column':'E'})
+    pipeline,*_=components(settings,[['Time','Name','Notes','Essay','Class'],
+        ['09/10/2026 20:00:00','Someone else','foreign_file','Foreign essay','IELTS 48'],
+        ['09/10/2026 22:00:00','Nguyễn Test','notebook_file_123','Actual essay','IELTS 45']])
+    source=pipeline.sources(binding,pipeline.sheets.roster(None,None))[0][1]
+    assert source['essay_texts']=={'1':'Actual essay'}
+    assert pipeline.discovery_errors==[]

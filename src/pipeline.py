@@ -58,6 +58,8 @@ class Pipeline:
         for row_number,row in enumerate(rows[binding.submission_start_row-1:],binding.submission_start_row):
             if not any(row):
                 continue
+            if binding.class_column and cell(row,binding.class_column) != binding.class_name:
+                continue
             try:
                 student=match_student(cell(row,binding.name_column),roster,binding.aliases)
                 received=parse_receipt(cell(row,binding.receipt_column))
@@ -220,6 +222,8 @@ class Pipeline:
                     processed+=1
                     binding_processed+=1
                     try:
+                        if existing and existing.get('pilot_review',{}).get('status')=='awaiting_review':
+                            raise ValueError('Staged real pilot awaits quality review before delivery')
                         if not existing and not binding.regrade_authorizations.get(student['id']) and self.sheets.has_prior_grading(spreadsheet,binding,student):
                             raise ValueError('Existing grading from the prior system is preserved; import audited completion evidence or authorize a new attempt')
                         # A formerly missing student can later acquire a too-late receipt; never stay falsely missing.
