@@ -72,8 +72,16 @@ def grade_essay(ai, settings, spec, original, reference_files, assessment=False)
     prompt += f'\nassessment={assessment}; verified word_count={count}; paragraph_count={paragraphs}\n'
     prompt += 'Keep the verified counts unchanged. Form paragraphs may use a single newline, with no blank line.\n'
     prompt += 'UNTRUSTED STUDENT ESSAY JSON:\n' + json.dumps(original,ensure_ascii=False)
-    for attempt in range(2):
-        result=validate_essay(ai.structured(settings.essay_model,prompt,EssayResult,reference_files),original,spec,assessment)
+    prompt += 'Correction.original must be copied character-for-character, including repeated spaces and punctuation. Do not tidy a quote.\n'
+    for attempt in range(3):
+        try:
+            result=validate_essay(ai.structured(settings.essay_model,prompt,EssayResult,reference_files),original,spec,assessment)
+        except ValueError as exc:
+            if attempt==2:
+                raise
+            # Ask the model to repair its structured output, never edit student quotes by hand.
+            prompt+='\nThe prior response failed validation: '+str(exc)+'\nRegenerate the complete result from the unchanged original, respecting all verified counts and verbatim quotes.\n'
+            continue
         review_prompt='Independently audit the original essay against the TRUSTED SPECIFICATION and this proposed feedback. '
         review_prompt+='Find omitted actual errors, false errors, missing first/second-idea signals, force constructions, inconsistent corrections/revision, unsupported numerical claims, or wrong learned outline requirements. '
         review_prompt+='Do not prefer your style over a valid teacher/student equivalent. Approve only when every substantive identified issue is addressed, with no fabricated errors.\n'
@@ -82,6 +90,6 @@ def grade_essay(ai, settings, spec, original, reference_files, assessment=False)
         review=ai.structured(settings.essay_model,review_prompt,QualityReview,reference_files)
         if review.approved:
             return result
-        if attempt==0:
+        if attempt<2:
             prompt+='\nQuality findings to verify against the ORIGINAL and correct in this attempt:\n'+review.model_dump_json()
     raise ValueError('Essay quality audit still identifies unresolved errors; do not publish')

@@ -24,7 +24,24 @@ def test_quality_audit_requires_resolution(binding,settings):
             return essay(original,binding.essays[0]) if schema is EssayResult else QualityReview(approved=False,issues=['Chưa nhận xét tín hiệu mở ý thứ nhất.'])
     ai=AI()
     with pytest.raises(ValueError,match='quality audit'): grade_essay(ai,settings,binding.essays[0],original,[])
-    assert ai.calls==[EssayResult,QualityReview,EssayResult,QualityReview]
+    assert ai.calls==[EssayResult,QualityReview]*3
+
+def test_invalid_model_quote_is_repaired_before_quality_audit(binding,settings):
+    original=' '.join(['word']*260)
+    class AI:
+        def __init__(self): self.calls=[]
+        def structured(self,model,prompt,schema,*_):
+            self.calls.append(schema)
+            if schema is QualityReview: return QualityReview(approved=True,issues=[])
+            result=essay(original,binding.essays[0])
+            if len(self.calls)==1:
+                from src.schemas import Correction
+                result.corrections=[Correction(section='Detail',original='invented quote',error='Invalid quote',suggested='word')]
+            else: assert 'failed validation' in prompt
+            return result
+    ai=AI()
+    assert grade_essay(ai,settings,binding.essays[0],original,[]).original==original
+    assert ai.calls==[EssayResult,EssayResult,QualityReview]
 
 def test_quality_audit_passes_verified_result(binding,settings):
     original=' '.join(['word']*260)
