@@ -34,10 +34,17 @@ def service(binding,monkeypatch,response=None,error=None):
         if error:raise error
         return SimpleNamespace(text=response,usage_metadata=types.GenerateContentResponseUsageMetadata(
             prompt_token_count=3000,candidates_token_count=1500,thoughts_token_count=500))
+    def count(**kwargs):
+        # Actual Developer API rejects the system/generation fields in CountTokensConfig.
+        assert 'config' not in kwargs
+        assert len(kwargs['contents'])==3
+        assert 'untrusted evidence' in kwargs['contents'][1].text
+        assert 'properties' in kwargs['contents'][2].text
+        return SimpleNamespace(total_tokens=3000)
     ai=GeminiService.__new__(GeminiService)
     ai.budget=ClassBudget(store,binding,{'job_id':'test'})
     ai.client=SimpleNamespace(models=SimpleNamespace(generate_content=generate,
-        count_tokens=lambda **_:SimpleNamespace(total_tokens=3000)))
+        count_tokens=count))
     ai.limiter=SimpleNamespace(wait=lambda:None);ai.audit=None;ai.job_id='test'
     return ai,calls,drive,store
 

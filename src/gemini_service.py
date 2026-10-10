@@ -74,10 +74,11 @@ class GeminiService:
         if saved:
             # Replay even invalid JSON: validation holds it without a second payment.
             return schema.model_validate_json(saved['response_text'] or '')
-        counted=self.client.models.count_tokens(model=model,contents=parts,
-            config=types.CountTokensConfig(system_instruction=SYSTEM,
-                generation_config=types.GenerationConfig(response_mime_type='application/json',
-                    response_json_schema=schema.model_json_schema())))
+        # Developer API countTokens does not accept system_instruction/generation_config.
+        # Count their text as extra parts instead; padding covers representation differences.
+        counted=self.client.models.count_tokens(model=model,contents=parts+[
+            types.Part.from_text(text=SYSTEM),
+            types.Part.from_text(text=json.dumps(schema.model_json_schema(),ensure_ascii=False))])
         if counted.total_tokens is None:
             raise ValueError('Could not count input tokens; generation held')
         self.budget.reserve(call_key,model,counted.total_tokens,config.max_output_tokens)
