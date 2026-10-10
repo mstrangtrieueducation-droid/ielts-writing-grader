@@ -39,6 +39,9 @@ def run_pilot(pipeline, bindings, selection):
         if not existing and not binding.regrade_authorizations.get(sid) and pipeline.sheets.has_prior_grading(spreadsheet,binding,student):
             raise ValueError('Previously returned feedback is preserved')
         state=pipeline.store.begin(binding,student,source)
+        # A failed/incomplete pilot must also remain outside automatic delivery.
+        state['pilot_review']={'status':'awaiting_review','delivery_authorized':False}
+        pipeline.store.save(state)
         try:
             pipeline.grade(state,binding)
         except Exception as exc:
@@ -47,6 +50,7 @@ def run_pilot(pipeline, bindings, selection):
             pipeline.store.save(state)
             raise
         state['pilot_review']={'status':'awaiting_review','delivery_authorized':False}
+        state.pop('last_error',None)
         pipeline.store.save(state)
         report['staged']+=1
         report['essays']+=len(state['payload']['essays'])
