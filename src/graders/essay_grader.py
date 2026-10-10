@@ -1,7 +1,7 @@
 import json
 import re
 from ..schemas import EssayResult, Transcription, QualityReview
-from ..parsers import word_count, essay_paragraphs
+from ..parsers import word_count, essay_paragraphs, digest
 from ..media import validate_page_audit, validate_references
 
 RUBRIC = '''Assess strictly against the actual assigned teacher theory, outline and chart ground truth.
@@ -80,7 +80,7 @@ def transcribe(ai, settings, binding, files, counts):
             raise ValueError('Handwriting cannot be read confidently')
     return {x.exercise:x.original for x in result.essays}
 
-def grade_essay(ai, settings, spec, original, reference_files, assessment=False):
+def grade_essay(ai, settings, spec, original, reference_files, assessment=False, checkpoint=None, pending=None):
     count = word_count(original)
     paragraphs = len(essay_paragraphs(original))
     prompt = RUBRIC + '\nTRUSTED SPECIFICATION:\n' + spec.model_dump_json()
@@ -88,6 +88,16 @@ def grade_essay(ai, settings, spec, original, reference_files, assessment=False)
     prompt += 'Keep the verified counts unchanged. Form paragraphs may use a single newline, with no blank line.\n'
     prompt += 'UNTRUSTED STUDENT ESSAY JSON:\n' + json.dumps(original,ensure_ascii=False)
     prompt += 'Correction.original must be copied character-for-character, including repeated spaces and punctuation. Do not tidy a quote.\n'
+    source_digest=digest(original+'\0'+spec.model_dump_json()+'\0'+str(assessment))
+    if pending:
+        if pending.get('source_digest')!=source_digest:
+            raise ValueError('Pending essay review does not match frozen original/specification')
+        saved=validate_essay(EssayResult.model_validate(pending['result']),original,spec,assessment)
+        saved_review=QualityReview.model_validate(pending['review'])
+        if saved_review.approved:
+            return saved
+        prompt+='\nResume this saved proposed result, preserving supported corrections:\n'+saved.model_dump_json()
+        prompt+='\nVerify and address these remaining findings against the original:\n'+saved_review.model_dump_json()
     for attempt in range(3):
         try:
             result=validate_essay(ai.structured(settings.essay_model,prompt,EssayResult,reference_files),original,spec,assessment)
@@ -104,6 +114,8 @@ def grade_essay(ai, settings, spec, original, reference_files, assessment=False)
         review_prompt+=f'\nVerified word_count={count}; paragraph_count={paragraphs}. Form paragraph breaks may be single newlines.\n'
         review_prompt+=spec.model_dump_json()+'\nUNTRUSTED ORIGINAL:\n'+json.dumps(original,ensure_ascii=False)+'\nPROPOSED RESULT:\n'+result.model_dump_json()
         review=ai.structured(settings.essay_model,review_prompt,QualityReview,reference_files)
+        if checkpoint:
+            checkpoint({'source_digest':source_digest,'result':result.model_dump(mode='json'),'review':review.model_dump(mode='json')})
         if review.approved:
             return result
         if attempt<2:

@@ -58,6 +58,24 @@ def test_quality_audit_passes_verified_result(binding,settings):
             return essay(original,binding.essays[0]) if schema is EssayResult else QualityReview(approved=True,issues=[])
     assert grade_essay(AI(),settings,binding.essays[0],original,[]).word_count==260
 
+def test_saved_review_resumes_without_losing_candidate_or_accepting_changed_source(binding,settings):
+    original=' '.join(['word']*260)
+    checkpoints=[]
+    class UnresolvedAI:
+        def structured(self,model,prompt,schema,*_):
+            return essay(original,binding.essays[0]) if schema is EssayResult else QualityReview(approved=False,issues=['Clarify comparison scope.'])
+    with pytest.raises(ValueError,match='quality audit'):
+        grade_essay(UnresolvedAI(),settings,binding.essays[0],original,[],checkpoint=checkpoints.append)
+    class ResumedAI:
+        def structured(self,model,prompt,schema,*_):
+            if schema is EssayResult:
+                assert 'Resume this saved proposed result' in prompt and 'Clarify comparison scope.' in prompt
+                return essay(original,binding.essays[0])
+            return QualityReview(approved=True,issues=[])
+    assert grade_essay(ResumedAI(),settings,binding.essays[0],original,[],pending=checkpoints[-1]).original==original
+    with pytest.raises(ValueError,match='frozen original'):
+        grade_essay(ResumedAI(),settings,binding.essays[0],original+' changed',[],pending=checkpoints[-1])
+
 def test_assessment_has_no_notebook_gate_and_moves_only_after_delivery(binding,settings,monkeypatch):
     binding=binding.model_copy(update={'assignment_type':'assessment','task_code':'TEST3'})
     drive=FakeDrive()
@@ -68,7 +86,7 @@ def test_assessment_has_no_notebook_gate_and_moves_only_after_delivery(binding,s
     monkeypatch.setattr(module,'grade_notebook',lambda *_: (_ for _ in ()).throw(AssertionError('No notebook gate for tests')))
     monkeypatch.setattr(module,'transcribe',lambda *_:{1:'Original assessment essay'})
     seen=[]
-    def grade(ai,settings,spec,original,refs,assessment): seen.append(assessment); return essay(original,spec)
+    def grade(ai,settings,spec,original,refs,assessment,*_): seen.append(assessment); return essay(original,spec)
     monkeypatch.setattr(module,'grade_essay',grade)
     assert pipeline.run([binding])['errors'] and not drive.moved
     assert pipeline.run([binding])['completed']==1 and len(drive.moved)==1 and seen==[True]
