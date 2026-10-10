@@ -75,6 +75,22 @@ def test_failed_private_pilot_cannot_be_delivered_by_regular_run(binding,setting
     assert pipeline.run([binding])['errors']
     assert not dashboard.payloads and not sheets.blocks
 
+@pytest.mark.parametrize('status',['rejected','invalidated'])
+def test_rejected_pilot_cannot_be_retried_or_automatically_published(binding,settings,status):
+    from test_pipeline import components
+    from src.pilot import run_pilot
+    pipeline,drive,sheets,dashboard,store=components(settings,[['Time','Name','Notes','Essay'],['09/10/2026 23:00:00','Nguyễn Test','notebook_file_123','Essay']])
+    student,source=pipeline.sources(binding,pipeline.sheets.roster(None,None))[0]
+    state=store.begin(binding,student,source)
+    state['payload']=pipeline.payload(binding,student,source,'graded','Saved, rejected quality.',[])
+    state['pilot_review']={'status':status,'delivery_authorized':False}
+    store.save(state)
+    pipeline.grade=lambda *_:(_ for _ in ()).throw(AssertionError('Rejected work must not be regenerated'))
+    assert pipeline.run([binding])['errors']
+    with pytest.raises(ValueError,match='new explicit authorization'):
+        run_pilot(pipeline,[binding],{'class_name':binding.class_name,'task_code':binding.task_code,'student_ids':['S1']})
+    assert state['pilot_review']['status']==status and not dashboard.payloads and not sheets.blocks
+
 def test_binding_requires_explicit_copy_scope(binding):
     from pydantic import ValidationError
     data=binding.model_dump();data['notebook_copy_scope']=''

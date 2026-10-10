@@ -229,8 +229,8 @@ class Pipeline:
                     processed+=1
                     binding_processed+=1
                     try:
-                        if existing and existing.get('pilot_review',{}).get('status')=='awaiting_review':
-                            raise ValueError('Staged real pilot awaits quality review before delivery')
+                        if existing and existing.get('pilot_review'):
+                            raise ValueError('Private pilot requires dedicated approved delivery; regular grading cannot release it')
                         if not existing and not binding.regrade_authorizations.get(student['id']) and self.sheets.has_prior_grading(spreadsheet,binding,student):
                             raise ValueError('Existing grading from the prior system is preserved; import audited completion evidence or authorize a new attempt')
                         # A formerly missing student can later acquire a too-late receipt; never stay falsely missing.

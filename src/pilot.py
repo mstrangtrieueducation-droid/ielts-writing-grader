@@ -41,6 +41,8 @@ def run_pilot(pipeline, bindings, selection):
         existing=pipeline.store.jobs.get(jid)
         if existing and existing['phase']=='complete':
             raise ValueError('Already delivered pilot is preserved')
+        if existing and existing.get('pilot_review',{}).get('status') in ('rejected','invalidated'):
+            raise ValueError('Rejected pilot is preserved; another attempt requires new explicit authorization')
         if not existing and not binding.regrade_authorizations.get(sid) and pipeline.sheets.has_prior_grading(spreadsheet,binding,student):
             raise ValueError('Previously returned feedback is preserved')
         state=pipeline.store.begin(binding,student,source)
