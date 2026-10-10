@@ -39,7 +39,13 @@ def run_pilot(pipeline, bindings, selection):
         if not existing and not binding.regrade_authorizations.get(sid) and pipeline.sheets.has_prior_grading(spreadsheet,binding,student):
             raise ValueError('Previously returned feedback is preserved')
         state=pipeline.store.begin(binding,student,source)
-        pipeline.grade(state,binding)
+        try:
+            pipeline.grade(state,binding)
+        except Exception as exc:
+            state['last_error']={'type':type(exc).__name__,
+                'reason':str(exc) if isinstance(exc,ValueError) else 'External grading operation failed; inspect the private API audit and resume saved phase'}
+            pipeline.store.save(state)
+            raise
         state['pilot_review']={'status':'awaiting_review','delivery_authorized':False}
         pipeline.store.save(state)
         report['staged']+=1
