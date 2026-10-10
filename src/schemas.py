@@ -33,6 +33,7 @@ class Binding(Strict):
     source_reference: str = Field(min_length=5)
     source_file_ids: list[str] = Field(min_length=1)
     notebook_requirements: list[Requirement] = Field(default_factory=list)
+    notebook_copy_scope: str = ''
     vocabulary: list[Requirement] = Field(default_factory=list)
     essays: list[EssaySpec] = Field(default_factory=list)
     form_spreadsheet_id: str = ''
@@ -75,6 +76,8 @@ class Binding(Strict):
                 raise ValueError('Verified actual next Writing date and due time required')
         if self.assignment_type in ('homework', 'notebook') and not self.notebook_requirements:
             raise ValueError('Explicit assigned notebook checklist required')
+        if self.assignment_type in ('homework', 'notebook') and len(self.notebook_copy_scope.strip())<20:
+            raise ValueError('Explicit notebook copying boundary and excluded homework sources required')
         if self.assignment_type == 'vocabulary' and not self.vocabulary:
             raise ValueError('Explicit vocabulary checklist required')
         if self.roster_end_row < self.roster_start_row:

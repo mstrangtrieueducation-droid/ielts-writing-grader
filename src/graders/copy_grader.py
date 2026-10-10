@@ -19,6 +19,8 @@ def grade_notebook(ai, settings, binding, student_files, reference_files, counts
     prompt = 'Inspect every student page against ONLY this assigned checklist. Reconstruct out-of-order and interleaved pages. '
     prompt += 'Give each item an evidence-based finding; page_audit covers student files only. '
     prompt += 'Missing findings require a search of all pages, not an inference from page order.\n'
+    prompt += 'TRUSTED COPYING BOUNDARY: '+binding.notebook_copy_scope+'\n'
+    prompt += 'Homework questions, new homework charts/tables, blank answer sheets and tool/submission instructions are not notebook copying requirements. Do not reject a notebook for their absence.\n'
     prompt += json.dumps({'version': binding.version, 'requirements':[r.model_dump() for r in binding.notebook_requirements],
         'student_files':counts, 'reference_files':[x[0] for x in reference_files]}, ensure_ascii=False)
     result = validate_check(ai.structured(settings.notebook_model, prompt, NotebookResult,

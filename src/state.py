@@ -40,4 +40,14 @@ class StateStore:
             return False
         return any(s['binding']['class_name']==binding.class_name and s['binding']['task_code']==binding.task_code
             and s['student']['id']==student['id'] and s.get('payload',{}).get('state')=='notebook_failed'
-            for s in self.jobs.values() if s.get('payload'))
+            for s in self.jobs.values() if s.get('payload') and not s.get('invalidation'))
+
+    def invalidate_unpublished(self, state, evidence):
+        # Audited correction of a bad private pilot rubric is not a teacher notebook waiver.
+        if state['phase']!='captured' or not state.get('pilot_review') or state.get('delivery'):
+            raise ValueError('Only an unpublished staged pilot may be invalidated here')
+        if not evidence.get('reason') or not evidence.get('source_reference'):
+            raise ValueError('Scope invalidation requires source-backed correction evidence')
+        state['invalidation']=evidence
+        state['pilot_review']['status']='invalidated'
+        self.save(state)

@@ -10,6 +10,7 @@ def binding():
     return Binding(task_code='W29',class_name='IELTS 45',assignment_type='homework',lesson=29,
         ready=True,source_verified=True,version='v1',source_reference='verified-source-audit',
         source_file_ids=['reference_file_123'],notebook_requirements=[{'id':'notes','text':'Handwritten model and assigned translation'}],
+        notebook_copy_scope='Copy only assigned teacher notes/model/translation. Exclude new homework questions/charts, blank answer sheets and tool instructions.',
         essays=[{'exercise':1,'task':2,'question':'Discuss the benefits and risks of online communication.',
             'taught_theory':'Explain the causal chain and each assigned argument using taught foundations.',
             'assigned_outline':'Risk with mitigation; business communication benefits.', 'ground_truth':'No chart.'}],
