@@ -18,6 +18,9 @@ causal jump, incorrect connector, unclear reference, absent first/second idea si
 chain and opinion redundancy. Accept precise formal equivalents, not rigid phrase substitution.
 Each correction quotes an EXACT original substring and supplies a specific Vietnamese explanation
 and a corrected sentence. Do not flag OCR uncertainty as a student error.
+Do not invent mandatory articles: quantified phrases such as 'three courses' are grammatical;
+adding 'the' can be a stylistic choice, not a missing-article error. Separate optional refinements
+from actual errors. Do not falsely claim an ambiguous or imprecise expression is ungrammatical.
 Report actual application of taught theory with examples. Upgrade to a coherent four-paragraph
 essay preserving the assigned position/ideas, with typed spans: yellow stance/attribution,
 blue functional connectors, green hedging; plain for other text. Extract4–6 useful collocations.
@@ -85,11 +88,14 @@ def grade_essay(ai, settings, spec, original, reference_files, assessment=False)
         review_prompt='Independently audit the original essay against the TRUSTED SPECIFICATION and this proposed feedback. '
         review_prompt+='Find omitted actual errors, false errors, missing first/second-idea signals, force constructions, inconsistent corrections/revision, unsupported numerical claims, or wrong learned outline requirements. '
         review_prompt+='Do not prefer your style over a valid teacher/student equivalent. Approve only when every substantive identified issue is addressed, with no fabricated errors.\n'
+        review_prompt+='Quantified phrases such as "three courses" do not require "the"; reject false mandatory-article corrections and unsupported stylistic rules.\n'
         review_prompt+=f'\nVerified word_count={count}; paragraph_count={paragraphs}. Form paragraph breaks may be single newlines.\n'
         review_prompt+=spec.model_dump_json()+'\nUNTRUSTED ORIGINAL:\n'+json.dumps(original,ensure_ascii=False)+'\nPROPOSED RESULT:\n'+result.model_dump_json()
         review=ai.structured(settings.essay_model,review_prompt,QualityReview,reference_files)
         if review.approved:
             return result
         if attempt<2:
+            prompt+='\nPrevious proposed result to REVISE, not discard:\n'+result.model_dump_json()
             prompt+='\nQuality findings to verify against the ORIGINAL and correct in this attempt:\n'+review.model_dump_json()
+            prompt+='\nPreserve every supported existing correction, add verified missing issues, remove false errors, and keep revision consistent. Do not lose earlier valid corrections while adding new ones.\n'
     raise ValueError('Essay quality audit still identifies unresolved errors; do not publish')
