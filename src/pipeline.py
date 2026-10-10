@@ -8,6 +8,7 @@ from .media import page_count
 from .graders.copy_grader import grade_notebook
 from .graders.vocab_grader import grade_vocabulary
 from .graders.essay_grader import grade_essay, transcribe
+from .graders.essay_bundle import grade_bundle
 from .delivery import deliver
 from .announcements import save_draft
 
@@ -120,6 +121,11 @@ class Pipeline:
             return
         if self.ai is not None and hasattr(self.ai,'bind_budget'):
             self.ai.bind_budget(self.store,binding,state)
+        hybrid=self.settings.essay_model=='gemini-3.1-pro-preview'
+        if hybrid and binding.assignment_type in ('homework','assessment') and not state['essay_results'] and not state.get('bundle_work'):
+            if self.ai is None or not hasattr(self.ai,'preflight_student_plan'):
+                raise ValueError('Hybrid budget planning is required before notebook generation')
+            self.ai.preflight_student_plan(binding)
         references=self.files(binding.source_file_ids)
         checksums={fid:hashlib.sha256(data).hexdigest() for fid,data,_ in references}
         if state.get('source_checksums') and state['source_checksums']!=checksums:
@@ -172,6 +178,18 @@ class Pipeline:
                 state['transcription']=transcribe(self.ai,self.settings,binding,files,counts)
                 self.store.save(state)
             source['essay_texts']={str(k):v for k,v in state['transcription'].items()}
+        if hybrid and len(state['essay_results'])!=len(binding.essays):
+            if state['essay_results'] or state.get('essay_work'):
+                raise ValueError('Existing individual essay attempts are preserved; no automatic hybrid regrade')
+            if binding.assignment_type!='homework':
+                raise ValueError('Hybrid bundle is homework-only; assessment needs a separate approved plan')
+            def bundle_checkpoint(work):
+                state['bundle_work']=work
+                self.store.save(state)
+            results=grade_bundle(self.ai,self.settings,binding.essays,source['essay_texts'],
+                bundle_checkpoint,state.get('bundle_work'))
+            state['essay_results']={str(result.exercise):result.model_dump(mode='json') for result in results}
+            self.store.save(state)
         for spec in binding.essays:
             key=str(spec.exercise)
             if key in state['essay_results']:

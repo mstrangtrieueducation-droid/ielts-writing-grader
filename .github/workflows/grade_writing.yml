@@ -38,7 +38,9 @@ jobs:
       FOLDER_STATE_ID: ${{ vars.FOLDER_STATE_ID }}
       GUIDELINES_SPREADSHEET_ID: ${{ vars.GUIDELINES_SPREADSHEET_ID }}
       GEMINI_NOTEBOOK_MODEL: ${{ vars.GEMINI_NOTEBOOK_MODEL }}
-      GEMINI_ESSAY_MODEL: ${{ vars.GEMINI_ESSAY_MODEL }}
+      # The earlier Flash-only trial authorization must never authorize a Pro call.
+      GEMINI_ESSAY_MODEL: ${{ inputs.mode == 'pilot' && inputs.authorized_flash_trial && 'gemini-3.8-flash' || vars.GEMINI_ESSAY_MODEL }}
+      GEMINI_STUDENT_BUDGET_VND: ${{ vars.GEMINI_STUDENT_BUDGET_VND || '1000' }}
       DASHBOARD_BASE_URL: ${{ vars.DASHBOARD_BASE_URL }}
       CLASS_SHEET_MAP_JSON: ${{ secrets.CLASS_SHEET_MAP_JSON }}
       PILOT_SELECTION_JSON: ${{ secrets.PILOT_SELECTION_JSON }}

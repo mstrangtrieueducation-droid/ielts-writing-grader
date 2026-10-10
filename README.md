@@ -20,7 +20,7 @@ Mã nguồn chấm vở, sổ từ vựng, bài viết homework và PDF kiểm t
 
 `gemini_service.py`, `retry.py`: SDK Google GenAI, giới hạn request. Các thao tác đọc/ghi nguồn có backoff; riêng sinh kết quả trả phí chỉ gửi một lần, tắt cả retry SDK. Timeout/429/5xx hoặc JSON lỗi được giữ lại, không tự trả tiền để chạy lại. Phản hồi và token usage được lưu riêng trên Drive trước validation.
 
-`graders/`: mọi kiểm tra ảnh vở/từ vựng và OCR chỉ dùng Flash, kể cả lượt kiểm tra độc lập khi nghi thiếu/đánh máy. Bất đồng hoặc ảnh chưa đọc rõ được giữ chờ. Mỗi bài viết chỉ một lượt Flash với JSON Schema: tự soát trong cùng prompt, sau đó kiểm tra bằng mã về định danh, số từ/đoạn, trích dẫn và tiêu chí định lượng. Không gọi model kiểm toán/sửa lại riêng; kiểm tra bằng mã không thay thế kiểm toán ngữ nghĩa độc lập.
+`graders/`: mọi kiểm tra ảnh vở/từ vựng, outline được giao và OCR chỉ dùng Flash, kể cả lượt kiểm tra độc lập khi nghi thiếu/đánh máy. Bất đồng hoặc ảnh chưa đọc rõ được giữ chờ. Luồng Flash cũ chữa mỗi bài một lượt; cấu hình hybrid mới gom đúng hai bài homework của một học sinh vào một lượt Pro chỉ nhận chữ. Cả hai dùng JSON Schema và kiểm tra bằng mã, không gọi model kiểm toán/sửa lại riêng. Kiểm tra bằng mã không thay thế kiểm toán ngữ nghĩa độc lập.
 
 `pipeline.py`, `state.py`: lưu phiên bản rubric, nguồn, receipt, kết quả và từng pha giao bài. Kết quả đã hoàn tất không tự chấm lại. Có lỗi tracker/Pages thì dùng kết quả đã lưu để giao lại.
 
@@ -55,12 +55,17 @@ Repository variables:
 | `FOLDER_INCOMING_SCAN_ID` | Thư mục scan chưa xử lý |
 | `FOLDER_PROCESSED_SCAN_ID` | Thư mục scan xử lý xong, khác incoming/state |
 | `GEMINI_NOTEBOOK_MODEL` | `gemini-3.8-flash`, duy nhất cho ảnh/vở/từ vựng/OCR |
-| `GEMINI_ESSAY_MODEL` | `gemini-3.8-flash`, chấm chữ một lượt, không ảnh/PDF |
+| `GEMINI_ESSAY_MODEL` | `gemini-3.8-flash` cho luồng Flash; `gemini-3.1-pro-preview` cho hybrid hai bài homework, chỉ nhận chữ |
+| `GEMINI_STUDENT_BUDGET_VND` | Mặc định `1000`, tổng Flash + Pro mỗi học sinh/buổi trong hybrid, cộng dồn cả các job mới |
 | `DASHBOARD_BASE_URL` | URL Pages gốc, HTTPS, không có fragment |
 | `GRADING_ENABLED` | Chỉ đặt `true` sau preflight và nghiệm thu một bài thử |
 | `GEMINI_GENERATION_ENABLED` | Mặc định tắt; phải bật riêng mới được gửi yêu cầu sinh trả phí |
 
-Theo lựa chọn mới của Cô ngày 10/10/2026, **cả hai biến model phải là `gemini-3.8-flash`**. Chặn Pro và mọi fallback model ở cả cấu hình và ngay trước gọi API. Preflight chỉ kiểm tra quyền truy cập, không chứng minh chất lượng chữa bài. Không dùng `gemini-1.5-flash/pro` trong triển khai mới.
+Theo lựa chọn sau cùng của Cô ngày 10/10/2026, **Flash xử lý ảnh/vở/outline, Pro gom hai bài viết trong một lượt**. Pro vẫn tính phí đầu vào chữ của chính lượt Pro; không thể tính khoản này theo giá Flash. Chặn Pro cho ảnh, vở, OCR và các lượt chữa riêng lẻ; không fallback model. Preflight chỉ kiểm tra quyền truy cập, không chứng minh chất lượng chữa bài. Không dùng `gemini-1.5-flash/pro` trong triển khai mới.
+
+**Trạng thái hybrid: đã chuẩn bị mã, chưa chạy trả phí hoặc nghiệm thu.** Trần 1.000đ/em không đủ cho dự phòng 8.192 output token của Pro (riêng output tối đa khoảng 2.556đ ở tỷ giá giả định 26.000đ/USD). Luồng dừng ngay trước đọc vở nếu kế hoạch không đủ ngân sách. Hai cờ generation/grading vẫn OFF. Không coi lượt dừng vì ngân sách là đã chấm xong; không tăng trần, ép cắt bản chữa hoặc tự đổi sang Batch/Flex để vượt giới hạn.
+
+Ví dụ dự trù, **không phải hóa đơn hoặc đo thực tế**: một lượt vở/outline Flash 6.000 input + 1.000 output khoảng 215đ; một lượt Pro gom hai bài 3.000 input + 4.000–6.000 output khoảng 1.404–2.028đ. Tổng khoảng **1.619–2.243đ/em**. Output gồm cả suy luận và JSON, lượng lỗi và độ dài bản chữa làm thay đổi chi phí. Giữ nguyên trần lớp/buổi 14.900đ đang có; trần này cũng có thể giữ lại các học sinh còn chờ.
 
 Service account cần Sheets API + Drive API và quyền Editor trên guideline/tracker/state/incoming/processed; quyền đọc các Form response, bài học, chart và tệp học sinh. Nếu tạo tệp state bằng service account, dùng **Shared Drive** hỗ trợ service account và cấp đúng quyền. Service account thường không có storage quota để tạo tệp mới trong My Drive: chia sẻ một thư mục My Drive đơn thuần không bảo đảm ghi state được. Không chuyển tệp scan gốc ra khỏi vị trí đang cần cho lớp; incoming nên là bản scan dành riêng cho pipeline.
 
@@ -140,13 +145,13 @@ Nếu lỗi: đọc `job-<hash>.json` trong state folder để biết phase/last
 
 ## Luồng tiết kiệm theo yêu cầu ngày 10/10/2026
 
-- Cả vở và bài viết đều dùng Flash; không fallback Pro. Lượt chữa bài viết chỉ nhận `EssaySpec` bằng chữ (đề, lý thuyết đã học, dàn ý và dữ liệu biểu đồ đã xác minh), bài gõ chữ và rubric. Không đính kèm vở, PDF bài học hoặc ảnh biểu đồ vào lượt chữa chữ. Task 1 thiếu ground truth dạng chữ thì giữ lại, không đoán.
+- Luồng Flash ban đầu dưới đây được giữ để so sánh chi phí; cấu hình hybrid mới ở trên thay thế lựa chọn model cho các lượt mới. Cả hai chỉ gửi `EssaySpec` bằng chữ (đề, lý thuyết đã học, dàn ý và dữ liệu biểu đồ đã xác minh), bài gõ chữ và rubric vào model chữa bài. Không đính kèm vở, PDF bài học hoặc ảnh biểu đồ vào lượt chữa chữ. Task 1 thiếu ground truth dạng chữ thì giữ lại, không đoán.
 - Vở vẫn đọc đủ trang, không giảm trang để giảm tiền. Flash có thể có lượt thứ hai cho kết luận thiếu/đánh máy; dự trù cơ sở dưới đây tính một lượt vở, lượt thứ hai tăng tiền.
 - `cost_control.py` dự phòng chi phí trước mỗi yêu cầu, dùng token counter cho đầu vào cộng 20% + 256 token, output cap 8192 gồm suy luận. Sổ chi phí bền vững chung cho đúng lớp/buổi, không reset khi đổi học sinh, workflow hoặc authorization. Tiền chưa rõ tiếp tục chiếm dự phòng. Phản hồi nhận được được tái dùng mà không gọi lại.
 - Ngưỡng ứng dụng là **14.900đ/lớp/buổi**. Vượt dự phòng thì dừng trước gọi; có thể còn học sinh chưa chấm. Đây không phải cam kết hoàn tất cả lớp dưới 15.000đ, cũng không phải cap billing Google. Tỷ giá 26.000đ/USD chỉ giả định; sai khác hóa đơn/thuế chưa được nghiệm thu bằng lượt thật. Bảng giá được khóa đến 31/12/2026, hết hiệu lực giữ lại.
 - Flash chữa bài viết dùng `thinking_level=medium`; kiểm tra vở/OCR dùng `low`. Giữ soát toàn bộ bài và mọi lỗi có căn cứ, kiểm tra logic/ý/đoạn/đại lượng/grammar/word choice, ví dụ cụ thể trong nhận xét áp dụng lý thuyết và tính nhất quán giữa lỗi và bản chữa. Không giới hạn số lỗi nhằm ép ngân sách. JSON bị cắt vẫn giữ lại, không tự sinh lại. Chất lượng luồng mới chưa nghiệm thu bằng bài thật; không bảo đảm ngang Pro chỉ nhờ prompt và Schema. Không bật tự động hoặc trả bài từ thay đổi mã này.
 
-Dự trù giấy theo [bảng giá Google](https://ai.google.dev/gemini-api/docs/pricing), Standard: Flash $0,75 input / $3,75 output trên 1 triệu token đến 31/12/2026. Output **gồm suy luận và JSON**. Giá Pro vẫn có trong bộ tính để đối chiếu lịch sử; điều này không cho phép gọi Pro nữa.
+Dự trù giấy theo [bảng giá Google](https://ai.google.dev/gemini-api/docs/pricing), Standard: Flash $0,75 input / $3,75 output trên 1 triệu token đến 31/12/2026; Pro $2 input / $12 output khi input ≤200.000 token. Output **gồm suy luận và JSON**. Model Pro chỉ được gọi qua schema bundle văn bản khi cả cấu hình, ngân sách và cờ generation cho phép.
 
 Giả định bài viết: 3.000–5.000 token đầu vào gồm rubric/lý thuyết/schema và 2.000–4.000 token đầu ra. Vở: 10.000–20.000 input và 1.000–2.000 output. Không dùng số từ bài gõ làm toàn bộ token bill.
 

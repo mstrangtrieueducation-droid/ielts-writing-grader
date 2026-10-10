@@ -33,6 +33,7 @@ class Binding(Strict):
     source_reference: str = Field(min_length=5)
     source_file_ids: list[str] = Field(min_length=1)
     notebook_requirements: list[Requirement] = Field(default_factory=list)
+    outline_requirements: list[Requirement] = Field(default_factory=list)
     notebook_copy_scope: str = ''
     vocabulary: list[Requirement] = Field(default_factory=list)
     essays: list[EssaySpec] = Field(default_factory=list)
@@ -82,7 +83,7 @@ class Binding(Strict):
             raise ValueError('Explicit vocabulary checklist required')
         if self.roster_end_row < self.roster_start_row:
             raise ValueError('Invalid roster bounds')
-        ids = [r.id for r in self.notebook_requirements]
+        ids = [r.id for r in self.notebook_requirements + self.outline_requirements]
         words = [r.id for r in self.vocabulary]
         exercises = [e.exercise for e in self.essays]
         if len(ids) != len(set(ids)) or len(words) != len(set(words)) or len(exercises) != len(set(exercises)):
@@ -168,6 +169,23 @@ class ThoroughFlashResult(EssayResult):
 
 class ThoroughFlashTask1Result(ThoroughFlashResult):
     numeric_checks: list[NumericCheck]
+
+class BundledEssayFeedback(Strict):
+    # Frozen source/counts are restored locally, never paid for a second time in output.
+    exercise: int
+    source_digest: str
+    status: Literal['Đạt yêu cầu', 'Cần sửa', 'Cần sửa và nộp lại']
+    summary_vi: str = Field(min_length=30)
+    taught_application_vi: str = Field(min_length=15)
+    corrections: list[Correction]
+    upgraded_paragraphs: list[list[ColoredSpan]] = Field(min_length=4, max_length=4)
+    collocations: list[Collocation] = Field(min_length=4, max_length=6)
+    language_checks: list[LanguageCheck]
+    numeric_checks: list[NumericCheck]
+
+class ProEssayBundle(Strict):
+    # One student's two homework essays, never a bundle of different students.
+    essays: list[BundledEssayFeedback] = Field(min_length=2, max_length=2)
 
 class QualityReview(Strict):
     approved: bool

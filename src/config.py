@@ -24,6 +24,7 @@ class Settings:
     requests_per_minute: int = 6
     retry_attempts: int = 6
     state_oauth: dict | None = None
+    student_budget_vnd: int = 1000
 
     @classmethod
     def from_env(cls):
@@ -59,6 +60,10 @@ class Settings:
             raise ValueError('Incoming, processed and state folders must be different')
         if not settings.dashboard_base_url.startswith('https://') or settings.max_jobs < 1 or settings.requests_per_minute < 1:
             raise ValueError('Invalid dashboard URL or execution limits')
-        if settings.notebook_model!='gemini-3.8-flash' or settings.essay_model!='gemini-3.8-flash':
-            raise ValueError('All grading must use the configured Gemini Flash model; no Pro fallback')
+        if settings.notebook_model!='gemini-3.8-flash' or settings.essay_model not in ('gemini-3.8-flash','gemini-3.1-pro-preview'):
+            raise ValueError('Notebook/OCR must use Flash; essays use Flash or an explicit text-only Pro bundle')
+        from dataclasses import replace
+        settings=replace(settings,student_budget_vnd=int(os.getenv('GEMINI_STUDENT_BUDGET_VND','1000')))
+        if settings.student_budget_vnd<1:
+            raise ValueError('Student budget must be positive')
         return settings

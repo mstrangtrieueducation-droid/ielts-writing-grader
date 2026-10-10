@@ -21,17 +21,20 @@ def grade_notebook(ai, settings, binding, student_files, reference_files, counts
     prompt = 'Inspect every student page against ONLY this assigned checklist. Reconstruct out-of-order and interleaved pages. '
     prompt += 'Give each item an evidence-based finding; page_audit covers student files only. '
     prompt += 'Missing findings require a search of all pages, not an inference from page order.\n'
+    requirements=binding.notebook_requirements+binding.outline_requirements
+    if binding.outline_requirements:
+        prompt += 'Also inspect the assigned student outlines in these same pages: verify each required argument, explanation/example and order against its explicit checklist, not merely a heading. Do not invent a student-outline requirement from the teacher essay outline. Unreadable evidence stays uncertain.\n'
     prompt += 'TRUSTED COPYING BOUNDARY: '+binding.notebook_copy_scope+'\n'
     prompt += 'Homework questions, new homework charts/tables, blank answer sheets and tool/submission instructions are not notebook copying requirements. Do not reject a notebook for their absence.\n'
-    prompt += json.dumps({'version': binding.version, 'requirements':[r.model_dump() for r in binding.notebook_requirements],
+    prompt += json.dumps({'version': binding.version, 'requirements':[r.model_dump() for r in requirements],
         'student_files':counts, 'reference_files':[x[0] for x in reference_files]}, ensure_ascii=False)
     result = validate_check(ai.structured(settings.notebook_model, prompt, NotebookResult,
-        reference_files+student_files), binding.notebook_requirements, counts)
+        reference_files+student_files), requirements, counts)
     # A second independent full-page inspection guards against false missing/printed verdicts.
     if notebook_state(result) == 'fail':
         audit_prompt = prompt + '\nPerform an independent search for every assigned item, without relying on another reviewer.'
         second = validate_check(ai.structured(settings.notebook_model, audit_prompt, NotebookResult,
-            reference_files+student_files), binding.notebook_requirements, counts)
+            reference_files+student_files), requirements, counts)
         original = {x.id:x.status for x in result.items}
         if original != {x.id:x.status for x in second.items}:
             raise ValueError('Independent notebook audits disagree; teacher/source verification required')

@@ -23,7 +23,7 @@ def cost_vnd(model, input_tokens, output_tokens, fx=USD_VND):
     return (input_tokens*price_in+output_tokens*price_out)*fx/1_000_000
 
 class ClassBudget:
-    def __init__(self, store, binding, job):
+    def __init__(self, store, binding, job, student_limit=None):
         self.drive,self.folder=store.drive,store.folder
         self.scope={'class_name':binding.class_name,'task_code':binding.task_code}
         self.filename='cost-ledger-'+digest(json.dumps(self.scope,sort_keys=True))+'.json'
@@ -36,6 +36,31 @@ class ClassBudget:
             raise ValueError('Cost ledger scope/limit differs; generation held')
         self.job_id=job['job_id']
         self.trial_limit=job.get('trial_cost_ceiling_vnd')
+        self.student_limit=student_limit
+        self.student_id=job.get('student',{}).get('id')
+        self.jobs=store.jobs
+        if student_limit is not None and not self.student_id:
+            raise ValueError('Stable student identity required for student cost ceiling')
+
+    def ensure_capacity(self, amount):
+        calls=list(self.data['calls'].values())
+        value=lambda c:c.get('accounted_vnd',c['reserved_vnd'])
+        if self.student_limit is not None:
+            student_spent=0
+            for call in calls:
+                identity=call.get('student_id') or self.jobs.get(call.get('job_id'),{}).get('student',{}).get('id')
+                if not identity:
+                    raise ValueError('Historical cost identity is unresolved; student budget held')
+                if identity==self.student_id:
+                    student_spent+=value(call)
+            if student_spent+amount>self.student_limit:
+                raise ValueError(f'Student/task cost ceiling of {self.student_limit:,} VND would be exceeded; generation held')
+        if self.trial_limit is not None:
+            trial_spent=sum(value(c) for c in calls if c.get('job_id')==self.job_id)
+            if trial_spent+amount>self.trial_limit:
+                raise ValueError('Explicit trial cost ceiling would be exceeded; generation held')
+        if sum(value(c) for c in calls)+amount>self.data['limit_vnd']:
+            raise ValueError('Class/task budget would exceed 14,900 VND; generation held')
 
     def save(self):
         self.drive.write_json(self.folder,self.filename,self.data)
@@ -55,15 +80,10 @@ class ClassBudget:
         # Allow room for token-counter overhead/schema differences; all output includes thought.
         bounded_input=math.ceil(tokens*1.2)+256
         amount=cost_vnd(model,bounded_input,max_output)
-        spent=sum(c.get('accounted_vnd',c['reserved_vnd']) for c in self.data['calls'].values())
-        if self.trial_limit is not None:
-            trial_spent=sum(c.get('accounted_vnd',c['reserved_vnd']) for c in self.data['calls'].values() if c.get('job_id')==self.job_id)
-            if trial_spent+amount>self.trial_limit:
-                raise ValueError('Explicit trial cost ceiling would be exceeded; generation held')
-        if spent+amount>self.data['limit_vnd']:
-            raise ValueError('Class/task budget would exceed 14,900 VND; generation held')
+        self.ensure_capacity(amount)
         self.data['calls'][key]={'status':'reserved','model':model,'input_bound':bounded_input,
-            'output_bound':max_output,'reserved_vnd':amount,'job_id':self.job_id}
+            'output_bound':max_output,'reserved_vnd':amount,'job_id':self.job_id,
+            'student_id':self.student_id}
         self.save()  # Do not send a paid request unless the reserve is durable.
 
     def received(self, key, response_text, usage):
