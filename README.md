@@ -83,7 +83,7 @@ python -m src.main --validate-config examples/notebook-binding.json
 
 Các trường bắt buộc cần xác minh:
 
-- `source_file_ids`: bài học/mẫu của đúng buổi, không dùng một checklist chung thay nội dung được giao. `notebook_requirements`: mọi nhóm/mục, kể cả dịch khi thực sự yêu cầu. Không tự thêm phần bị Cô xóa khỏi nguồn.
+- `source_file_ids`: bài học/mẫu của đúng buổi, không dùng một checklist chung thay nội dung được giao. `notebook_requirements`: mọi nhóm/mục, kể cả dịch khi thực sự yêu cầu. `notebook_copy_scope`: ranh giới phần phải chép và phần loại trừ. Đề, biểu đồ bài tập mới, trang trả lời trống và hướng dẫn thao tác/nộp bài không phải yêu cầu chép vở. Không tự thêm phần bị Cô xóa khỏi nguồn.
 - `version`, `source_reference`, `source_verified`: phiên bản prompt và bằng chứng đọc nguồn. Đổi nội dung sau freeze bị giữ lại để kiểm toán, không tự nâng rubric lịch sử.
 - `next_writing_date`, `next_writing_evidence`: lần Writing thực tế kế tiếp của đúng buổi trên dashboard, kể cả kiểm tra; cutoff 00:00 Việt Nam ngày đó. `due_at` có timezone dùng để phân biệt hạn bài tập với cutoff.
 - `form_spreadsheet_id`, `form_tab`, `name_column`, `receipt_column`, `notebook_columns`, `essay_columns`: đúng các cột Form, dùng chữ cột A1. `essay_columns` là map số đề → cột, ví dụ `{"1":"E","2":"F","3":"G"}`. Chỉ Forms là nguồn nhận homework; tracker chỉ roster và kết quả.
@@ -114,11 +114,11 @@ Body `{"event_type":"new_scan_uploaded"}` hoặc `{"event_type":"on_form_submit"
 1. Đưa source vào **repo riêng**, bật Pages root, thêm Secrets/variables và chia sẻ nguồn Google. Giữ `GRADING_ENABLED` chưa bật.
 2. Nhập/check từng Binding dựa trên dashboard và nguồn của Cô. Không kích hoạt bằng checklist mẫu.
 3. Actions → Run workflow → **preflight**. Bước này chỉ kiểm tra đọc/model; không gọi chấm và không ghi kết quả.
-4. Chạy một Binding mới chưa có bài trả trước đó; workflow mode **grade**. Xác minh chất lượng AI bằng nguồn thật, giao diện, tracker và thư mục processed. Test giả lập không thay thế nghiệm thu một bài thật.
+4. Chạy một Binding mới chưa có bài trả trước đó; workflow mode **pilot** với Secret `PILOT_SELECTION_JSON` gồm chính xác `class_name`, `task_code`, `student_ids`. Lượt này gọi Gemini trên nguồn thật và lưu kết quả riêng, không ghi dashboard/tracker. Kiểm tra nguồn, chất lượng và bản xem trước trước khi chuyển sang mode **grade** để kiểm tra giao kết quả. Test giả lập không thay thế nghiệm thu một bài thật.
 5. Trước khi cắt luồng cũ: nhập lịch sử/cutoff và các khóa vở được kiểm toán, hoặc chỉ kích hoạt buổi mới chưa có kết quả. Hệ thống chặn hồ sơ đã có block chấm trong tracker mà chưa có checkpoint của hệ thống mới. **Importer lịch sử dashboard cũ chưa được cung cấp trong bản này**; không giả vờ đã di chuyển toàn bộ lịch sử/khóa.
 6. Dừng writer/heartbeat chấm cũ cho chính phạm vi chuyển đổi, bảo đảm chỉ một owner; sau đó bật `GRADING_ENABLED=true`. Không tắt trigger Form/dashboard khác khi chỉ thay engine chấm.
 
-Đây chưa phải triển khai live: cần repo đích, credentials hợp lệ, thư mục/shared-drive, guidelines có nguồn thật và nghiệm thu API/Pages. Mã nguồn local không tự cấp quyền Google, tạo Secrets hoặc bật Pages. Không tạo thêm automation trong Codex khi workflow chưa được nghiệm thu.
+Kết nối repo/API/billing và lượt thử riêng không đồng nghĩa đã bật chấm toàn bộ. Chỉ bật `GRADING_ENABLED` sau khi nghiệm thu chất lượng và giao kết quả; trạng thái triển khai thật phải đọc từ cấu hình và bằng chứng chạy. Không tạo thêm automation trong Codex khi workflow chưa được nghiệm thu.
 
 ## Kiểm thử và vận hành
 
