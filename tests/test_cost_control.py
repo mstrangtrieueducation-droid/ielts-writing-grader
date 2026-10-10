@@ -4,7 +4,7 @@ from google.genai import types
 from src.cost_control import ClassBudget,cost_vnd,estimate_class
 from src.gemini_service import GeminiService
 from src.state import StateStore
-from src.schemas import EssayResult,NotebookResult,QualityReview
+from src.schemas import EssayResult,ThoroughFlashResult,NotebookResult,QualityReview
 from conftest import FakeDrive,essay
 
 def test_price_estimates_include_output_and_do_not_claim_15k():
@@ -74,6 +74,16 @@ def test_generation_saved_usage_replayed_without_second_call(binding,monkeypatch
     assert calls[0]['config'].max_output_tokens==8192
     assert calls[0]['config'].thinking_config.thinking_level==types.ThinkingLevel.MEDIUM
     assert records[0]['usage_metadata']['thoughts_token_count']==500
+
+def test_thorough_schema_keeps_essay_budget_and_blocks_attachments(binding,monkeypatch):
+    base=essay('An essay.',binding.essays[0]).model_dump()
+    result=ThoroughFlashResult(**base,language_checks=[{'unit_id':1,'verdict':'clear','correction_indices':[]}])
+    ai,calls,*_=service(binding,monkeypatch,result.model_dump_json())
+    with pytest.raises(ValueError,match='attachments prohibited'):
+        ai.structured('gemini-3.8-flash','prompt',ThoroughFlashResult,[('scan',b'pdf','application/pdf')])
+    ai.structured('gemini-3.8-flash','prompt',ThoroughFlashResult)
+    assert len(calls)==1 and calls[0]['config'].max_output_tokens==8192
+    assert calls[0]['config'].thinking_config.thinking_level==types.ThinkingLevel.MEDIUM
 
 def test_timeout_reserved_without_repeat_payment(binding,monkeypatch):
     ai,calls,drive,store=service(binding,monkeypatch,error=TimeoutError())

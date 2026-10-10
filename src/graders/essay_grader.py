@@ -1,6 +1,8 @@
 import json
 import re
-from ..schemas import EssayResult, FlashTask1Result, Transcription, QualityReview
+from pathlib import Path
+from ..schemas import (EssayResult, FlashTask1Result, ThoroughFlashResult,
+                       ThoroughFlashTask1Result, Transcription, QualityReview)
 from ..parsers import word_count, essay_paragraphs, digest
 from ..media import validate_page_audit, validate_references
 
@@ -40,23 +42,48 @@ missed and the necessary next step. Never substitute generic praise or a generic
 for individual feedback. Uncertain evidence stays held; never manufacture an error to sound strict.'''
 
 NUMERICAL_AUDIT = '''For Task1 complete numeric_checks for EVERY numeral occurrence in the original,
-including ranking/year figures and values quoted inside comparisons. Use original_claim copied
+including EACH repeated ranking/year figure, even a correct top-200 reference in the introduction
+or overview, and values quoted inside comparisons. Do not audit only erroneous/body values.
+Use original_claim copied
 verbatim with enough context, evidence specifying the real group/category/value from ground truth,
 and verdict accurate/incorrect/imprecise/ambiguous. For incorrect/imprecise/ambiguous claims,
 correction_quote must identify a corresponding correction explaining that same issue.
 Strict inequalities: exceeding/over/more than/above mean >, not >=; below/less than mean <.
 Check EVERY group in 'both', 'all', 'across X and Y', not just one. Equality invalidates a strict
-comparison. At least and no less than mean >=; not exceeding/no more than/not surpassing mean <=.
+comparison: classify that as incorrect, not imprecise. At least and no less than mean >=;
+not exceeding/no more than/not surpassing mean <=.
 A mathematically true but loose upper bound is NOT a wrong number: classify imprecise and recommend
 more specific observed values. Do not demand every boundary number equal a table cell.
 Check respectively has a clearly named matching group order; check higher/lower says compared with
 which group, and lowest/highest identifies within which category rather than implying a false global
-minimum/maximum. Fix all numerical implications consistently in suggestions AND the final revision.
+minimum/maximum. Correct table values with no identifiable group order are ambiguous, not accurate.
+For a static table use highest/largest rather than peak/peaking, which suggests a time development.
+Fix all numerical implications consistently in suggestions AND the final revision.
 Before completing the JSON, compare numeric_checks and corrections one-to-one: do not silently
 repair numerical errors only in the revision, retain incorrect inequalities in suggestions, or
 replace them with a different ambiguous extreme claim. Do not label a missing subject/category
 label as a missing grammatical subject when the clause already has a subject. Separate actual
 grammar errors, numerical errors, imprecision and optional improvements.'''
+
+PROMPT_VERSION='flash-one-pass-v03-language-and-data'
+LANGUAGE_AUDIT=(Path(__file__).resolve().parents[1]/'prompts'/'flash-language-v03.txt').read_text(encoding='utf-8')
+
+def language_units(original):
+    """Lossless reading segments; punctuation is an index, not a grammar verdict."""
+    units=[]
+    for paragraph_id,paragraph in enumerate(essay_paragraphs(original),1):
+        start=0
+        for stop in [m.end() for m in re.finditer(r'[.!?](?=\s|$)',paragraph)]+[len(paragraph)]:
+            text=paragraph[start:stop].strip();start=stop
+            if text:
+                units.append({'unit_id':len(units)+1,'paragraph':paragraph_id,'text':text})
+    return units
+
+def saved_result_schema(data):
+    # Preserve sealed legacy attempts without acquiring new required fields.
+    if 'language_checks' in data:
+        return ThoroughFlashTask1Result if 'numeric_checks' in data else ThoroughFlashResult
+    return FlashTask1Result if 'numeric_checks' in data else EssayResult
 
 def source_quote(quote, original):
     if quote in original:
@@ -93,7 +120,34 @@ def validate_essay(result, original, spec, assessment=False):
     upgraded = '\n\n'.join(''.join(s.text for s in paragraph) for paragraph in result.upgraded_paragraphs)
     if word_count(upgraded) < minimum:
         raise ValueError('Upgraded essay below required word count')
-    if isinstance(result,FlashTask1Result):
+    if isinstance(result,ThoroughFlashResult):
+        units=language_units(original)
+        spans=[];cursor=0
+        for unit in units:
+            pattern=r'\s+'.join(re.escape(t) for t in re.split(r'\s+',unit['text']))
+            match=re.compile(pattern).search(original,cursor)
+            if not match:
+                raise ValueError('Reading segment cannot be anchored to the original')
+            spans.append(match.span());cursor=match.end()
+        if sorted(c.unit_id for c in result.language_checks)!=list(range(1,len(units)+1)):
+            raise ValueError('Language audit does not cover every source segment exactly once')
+        linked=set()
+        for check in result.language_checks:
+            if check.verdict=='uncertain':
+                raise ValueError('Language evidence remains uncertain; result held')
+            if (check.verdict=='issues')!=bool(check.correction_indices):
+                raise ValueError('Language audit verdict contradicts correction references')
+            a,b=spans[check.unit_id-1]
+            for index in check.correction_indices:
+                if not 1<=index<=len(result.corrections):
+                    raise ValueError('Language audit references absent correction')
+                quote=result.corrections[index-1].original
+                if not any(max(a,m.start())<min(b,m.end()) for m in re.finditer(re.escape(quote),original)):
+                    raise ValueError('Language audit correction does not match its source segment')
+                linked.add(index)
+        if linked!=set(range(1,len(result.corrections)+1)):
+            raise ValueError('Correction lacks source-segment language audit')
+    if isinstance(result,(FlashTask1Result,ThoroughFlashTask1Result)):
         covered=[]
         for check in result.numeric_checks:
             check.original_claim=source_quote(check.original_claim,original)
@@ -133,9 +187,12 @@ def grade_essay(ai, settings, spec, original, reference_files, assessment=False,
     count = word_count(original)
     paragraphs = len(essay_paragraphs(original))
     prompt = RUBRIC + '\nTRUSTED SPECIFICATION:\n' + spec.model_dump_json()
-    schema=FlashTask1Result if spec.task==1 else EssayResult
+    schema=ThoroughFlashTask1Result if spec.task==1 else ThoroughFlashResult
+    units=language_units(original)
+    prompt+='\n'+LANGUAGE_AUDIT+'\nUNTRUSTED SOURCE SEGMENTS:\n'+json.dumps(units,ensure_ascii=False,separators=(',',':'))
     if spec.task==1:
         prompt+='\n'+NUMERICAL_AUDIT+'\n'
+        prompt+='Numeric-bearing unit IDs (cover every numeral in ALL these segments): '+json.dumps([u['unit_id'] for u in units if re.search(r'\d',u['text'])])+'\n'
     prompt += f'\nassessment={assessment}; verified word_count={count}; paragraph_count={paragraphs}\n'
     prompt += 'Keep the verified counts unchanged. Form paragraphs may use a single newline, with no blank line.\n'
     prompt += 'UNTRUSTED STUDENT ESSAY JSON:\n' + json.dumps(original,ensure_ascii=False)
@@ -148,17 +205,17 @@ def grade_essay(ai, settings, spec, original, reference_files, assessment=False,
         if pending.get('status') in ('received','validated'):
             # Replay the saved schema without requiring or generating a new audit
             # for legacy results that predate the numerical coverage contract.
-            saved_schema=FlashTask1Result if 'numeric_checks' in pending['result'] else EssayResult
+            saved_schema=saved_result_schema(pending['result'])
             result=validate_essay(saved_schema.model_validate(pending['result']),original,spec,assessment)
             if checkpoint and pending['status']=='received':
                 checkpoint({**pending,'status':'validated','result':result.model_dump(mode='json')})
             return result
         if pending.get('review') and QualityReview.model_validate(pending['review']).approved:
-            return validate_essay(EssayResult.model_validate(pending['result']),original,spec,assessment)
+            return validate_essay(saved_result_schema(pending['result']).model_validate(pending['result']),original,spec,assessment)
         # Preserve unresolved legacy audits and sent/failed calls. Never silently repay.
         raise ValueError('Saved essay attempt is unresolved; no automatic paid regeneration')
-    work={'source_digest':source_digest,'status':'reserved','mode':'flash_one_pass_text_v2',
-        'model':settings.essay_model}
+    work={'source_digest':source_digest,'status':'reserved','mode':PROMPT_VERSION,
+        'model':settings.essay_model,'prompt_sha256':digest(prompt)}
     if checkpoint:
         checkpoint(work.copy())  # Durable BEFORE the charge; a crash cannot auto-regenerate.
     try:

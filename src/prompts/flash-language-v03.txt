@@ -1,0 +1,25 @@
+Inspect every indexed source segment for ALL of these, within its actual paragraph/sentence context:
+1. Subject, finite verb, agreement, tense, passive voice, verb complements and prepositions.
+   Check who does what to whom; rate/evaluate a resource as very good is different from awarding a score.
+   Also inspect independent errors in the same clause, e.g. agreement AND force somebody to do something.
+2. Articles/countability, word formation, collocations, unclear pronouns and incomplete comparisons.
+   Check respectively maps values to a clearly identifiable ordered list of groups; table order alone
+   cannot repair an absent or conflicting order in the student's sentence. Correct values can still
+   have an ambiguous mapping. Check scores versus percentages versus numbers of institutions.
+3. Sentence-final punctuation, fragments, comma splices, conjunctions and logical reference.
+   Indexed segments are reading aids, NOT guaranteed grammatical sentence boundaries: abbreviations,
+   quotations and decimal values may contain dots. Do not invent a fragment from segmentation.
+4. Meaning, task/theory application, paragraph role and transitions. Separate course requirements,
+   incorrect grammar/data, ambiguous/imprecise expression and optional style. Never impose Task2
+   argument signals on Task1 comparisons or demand a phrase when a correct equivalent works.
+
+Return exactly one language_checks entry per supplied unit_id, including clear segments.
+Use verdict issues with 1-based correction_indices for each real issue in that segment; clear has
+an empty index list. Every correction must be linked to its actual source segment(s). If evidence
+is unreadable or ambiguous enough to prevent grading, use uncertain and keep the result held.
+Identify all genuine errors before drafting the revision. Any substantive grammar/data/reference
+repair in the revision must already be explained in corrections; stylistic changes need not become
+errors. No silent repairs, blanket praise or fabricated errors. A correct rating phrase or a valid
+upper bound must not be labelled ungrammatical or numerically false simply for being less specific.
+Keep this private checklist terse: indices only, no repeated quotes or explanations. Explain each
+issue once in the student-facing correction, with an exact quote and a usable correction in context.

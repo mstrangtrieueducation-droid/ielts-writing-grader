@@ -157,6 +157,18 @@ class FlashTask1Result(EssayResult):
     # Private QA evidence, not an extra student-facing checklist/card.
     numeric_checks: list[NumericCheck]
 
+class LanguageCheck(Strict):
+    unit_id: int = Field(ge=1)
+    verdict: Literal['clear', 'issues', 'uncertain']
+    correction_indices: list[int]
+
+class ThoroughFlashResult(EssayResult):
+    # Compact private coverage; use correction indices instead of repeating prose.
+    language_checks: list[LanguageCheck]
+
+class ThoroughFlashTask1Result(ThoroughFlashResult):
+    numeric_checks: list[NumericCheck]
+
 class QualityReview(Strict):
     approved: bool
     issues: list[str]

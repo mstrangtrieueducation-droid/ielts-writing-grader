@@ -1,7 +1,7 @@
 import pytest
 from src.graders.essay_grader import grade_essay
 from src.graders.essay_grader import source_quote
-from src.schemas import EssayResult, QualityReview
+from src.schemas import EssayResult, ThoroughFlashResult, ThoroughFlashTask1Result, QualityReview
 from src.parsers import essay_paragraphs
 import src.pipeline as module
 from src.pipeline import Pipeline
@@ -29,12 +29,12 @@ def test_one_pass_has_no_review_and_no_attachments(binding,settings):
         def __init__(self): self.calls=[]
         def structured(self,model,prompt,schema,attachments):
             self.calls.append(schema)
-            assert schema is EssayResult and attachments==()
+            assert schema is ThoroughFlashResult and attachments==()
             assert 'check every original clause' in prompt
             return essay(original,binding.essays[0])
     ai=AI()
     assert grade_essay(ai,settings,binding.essays[0],original,[('scan',b'private notebook','application/pdf')]).original==original
-    assert ai.calls==[EssayResult]
+    assert ai.calls==[ThoroughFlashResult]
 
 def test_essay_pro_config_rejected_without_paid_call(binding,settings):
     settings.essay_model='gemini-3.1-pro-preview'
@@ -58,7 +58,7 @@ def test_invalid_quote_held_without_paid_retry_even_after_restart(binding,settin
     assert checkpoints[0]['status']=='reserved' and checkpoints[-1]['status']=='held'
     with pytest.raises(ValueError,match='no automatic paid'):
         grade_essay(ai,settings,binding.essays[0],original,[],pending=checkpoints[-1])
-    assert ai.calls==[EssayResult]
+    assert ai.calls==[ThoroughFlashResult]
 
 def test_one_pass_validated_checkpoint_reused_without_model(binding,settings):
     original=' '.join(['word']*260)
@@ -90,13 +90,83 @@ def test_task1_requires_numeric_coverage_and_linked_corrections(binding,settings
         calls=0
         def structured(self,model,prompt,schema,attachments):
             self.calls+=1
-            assert schema is FlashTask1Result and not attachments
+            assert schema is ThoroughFlashTask1Result and not attachments
             assert 'not >=' in prompt and 'mathematically true but loose' in prompt
             return result
     checkpoints=[];ai=AI()
     grade_essay(ai,settings,spec,original,[],checkpoint=checkpoints.append)
     assert isinstance(grade_essay(None,settings,spec,original,[],pending=checkpoints[-1]),FlashTask1Result)
     assert ai.calls==1
+
+def test_language_segments_include_unpunctuated_intro_and_decimal_values():
+    from src.graders.essay_grader import language_units
+    units=language_units('Introduction without final punctuation\r\nThe value was 20.5%. It rose.\r\nLast sentence.')
+    assert [u['text'] for u in units]==['Introduction without final punctuation','The value was 20.5%.','It rose.','Last sentence.']
+    assert [u['unit_id'] for u in units]==[1,2,3,4]
+
+def language_result(original,spec):
+    from src.graders.essay_grader import language_units
+    from src.schemas import Correction
+    base=essay(original,spec).model_dump()
+    base['paragraph_count']=len(essay_paragraphs(original))
+    base['corrections']=[Correction(section='Body',original='force students giving up cars',
+        error='Force somebody to do something requires the infinitive.',suggested='force students to give up cars').model_dump()]
+    checks=[{'unit_id':u['unit_id'],'verdict':'issues' if 'force students' in u['text'] else 'clear',
+        'correction_indices':[1] if 'force students' in u['text'] else []} for u in language_units(original)]
+    return ThoroughFlashResult(**base,language_checks=checks)
+
+def test_language_coverage_and_references_reject_omissions(binding):
+    from src.graders.essay_grader import validate_essay
+    from src.schemas import LanguageCheck
+    original='Introduction with no final period\r\nThey force students giving up cars. Another sentence.'
+    result=language_result(original,binding.essays[0])
+    assert validate_essay(result,original,binding.essays[0]) is result
+    result.language_checks.pop()
+    with pytest.raises(ValueError,match='every source segment exactly once'):
+        validate_essay(result,original,binding.essays[0])
+    result=language_result(original,binding.essays[0])
+    result.language_checks[1]=LanguageCheck(unit_id=2,verdict='clear',correction_indices=[])
+    with pytest.raises(ValueError,match='Correction lacks'):
+        validate_essay(result,original,binding.essays[0])
+    result.language_checks[0]=LanguageCheck(unit_id=1,verdict='issues',correction_indices=[1])
+    with pytest.raises(ValueError,match='does not match'):
+        validate_essay(result,original,binding.essays[0])
+
+def test_thorough_one_pass_schema_replays_and_never_pays_to_repair(binding,settings):
+    original='They force students giving up cars. Another sentence.'
+    result=language_result(original,binding.essays[0]);calls=[];checkpoints=[]
+    class AI:
+        def structured(self,model,prompt,schema,attachments):
+            calls.append(schema)
+            assert not attachments and 'Sentence-final punctuation' in prompt
+            assert 'UNTRUSTED SOURCE SEGMENTS' in prompt and 'no repeated quotes' in prompt
+            return schema.model_validate(result.model_dump())
+    value=grade_essay(AI(),settings,binding.essays[0],original,[],checkpoint=checkpoints.append)
+    assert isinstance(value,ThoroughFlashResult)
+    assert isinstance(grade_essay(None,settings,binding.essays[0],original,[],pending=checkpoints[-1]),ThoroughFlashResult)
+    assert len(calls)==1 and checkpoints[-1]['mode']=='flash-one-pass-v03-language-and-data'
+    assert len(checkpoints[-1]['prompt_sha256'])==64
+    result.language_checks=[];checkpoints=[]
+    with pytest.raises(ValueError,match='every source segment'):
+        grade_essay(AI(),settings,binding.essays[0],original,[],checkpoint=checkpoints.append)
+    with pytest.raises(ValueError,match='no automatic paid regeneration'):
+        grade_essay(None,settings,binding.essays[0],original,[],pending=checkpoints[-1])
+    assert len(calls)==2
+
+def test_correct_repeated_top200_references_are_in_task1_reading_guide(binding,settings):
+    spec=binding.essays[0].model_copy(update={'task':1,'ground_truth':'Universities in the top 200 in 2011.'})
+    original='The table covers the top 200 in 2011.\nOverall, the USA leads the top 200.'
+    from src.graders.essay_grader import language_units
+    class AI:
+        def structured(self,model,prompt,schema,attachments):
+            assert schema is ThoroughFlashTask1Result and not attachments
+            assert 'Numeric-bearing unit IDs (cover every numeral in ALL these segments): [1, 2]' in prompt
+            assert 'EACH repeated ranking/year' in prompt
+            base=essay(original,spec).model_dump()
+            base['paragraph_count']=len(essay_paragraphs(original))
+            return schema(**base,language_checks=[{'unit_id':u['unit_id'],'verdict':'clear','correction_indices':[]} for u in language_units(original)],
+                numeric_checks=[{'original_claim':u['text'],'verdict':'accurate','evidence':'Trusted top-200 ranking and year 2011.','correction_quote':''} for u in language_units(original)])
+    assert grade_essay(AI(),settings,spec,original,[],checkpoint=lambda _:None).word_count>0
 
 def test_unresolved_legacy_review_preserved_without_regeneration(binding,settings):
     original=' '.join(['word']*260)
