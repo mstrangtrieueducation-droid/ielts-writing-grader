@@ -25,6 +25,7 @@ jobs:
     timeout-minutes: 120
     env:
       GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+      GEMINI_GENERATION_ENABLED: ${{ vars.GEMINI_GENERATION_ENABLED }}
       GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
       GOOGLE_STATE_OAUTH_JSON: ${{ secrets.GOOGLE_STATE_OAUTH_JSON }}
       DASHBOARD_MASTER_KEY: ${{ secrets.DASHBOARD_MASTER_KEY }}

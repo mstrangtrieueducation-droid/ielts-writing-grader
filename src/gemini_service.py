@@ -1,5 +1,6 @@
 import json
 import hashlib
+import os
 from datetime import datetime, timezone
 from google import genai
 from google.genai import types
@@ -35,6 +36,8 @@ class GeminiService:
             retry(lambda: self.client.models.get(model=model), self.attempts)
 
     def structured(self, model, prompt, schema, attachments=()):
+        if os.getenv('GEMINI_GENERATION_ENABLED')!='true':
+            raise ValueError('Paid Gemini generation is disabled; no grading API request sent')
         total = sum(len(data) for _, data, _ in attachments)
         if total > 15_000_000:
             raise ValueError('Multimodal request too large; split sources before activation')
