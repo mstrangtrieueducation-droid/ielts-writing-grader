@@ -1,0 +1,22 @@
+name: Verify grader
+on:
+  push:
+    paths: ['src/**', 'tests/**', 'requirements.txt', 'dashboard.js', 'index.html', '.github/workflows/**']
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+      - run: pip install -r requirements.txt
+      - run: python -m pytest -q
+      - run: python -m src.main --validate-config examples/notebook-binding.json
+      - run: python -m playwright install --with-deps chromium --only-shell
+      - run: python tests/ui_smoke.py

@@ -1,0 +1,10 @@
+google-genai>=1.47,<2
+google-api-python-client>=2.180,<3
+google-auth>=2.40,<3
+pydantic>=2.11,<3
+PyMuPDF>=1.26,<2
+cryptography>=45,<47
+pytest>=8.4,<10
+PyYAML>=6,<7
+playwright>=1.55,<2
+tzdata>=2025.2

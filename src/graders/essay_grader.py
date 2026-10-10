@@ -1,0 +1,85 @@
+import json
+import re
+from ..schemas import EssayResult, Transcription, QualityReview
+from ..parsers import word_count
+from ..media import validate_page_audit, validate_references
+
+RUBRIC = '''Assess strictly against the actual assigned teacher theory, outline and chart ground truth.
+For Task1 verify each original year, category, quantity, unit, axis, legend and numerical comparison;
+overview includes relevant trends/extrema/turning points supported by this specific chart.
+Do not invent a peak for a non-trend chart. Counts: number of cars, not amount of cars/how much cars.
+Check comma thousands versus decimal points in context, not a blind substitution.
+Teacher presentation rules: minimum150(Task1)/250(Task2), exactly4 paragraphs, 3–5 sentences
+per body unless the trusted specification overrides. Distinguish these course rules from grammar.
+Flag contractions, informal like used to list examples, and sentence-initial So/Because/But as
+teacher register requirements; a complete Because-clause followed by a main clause is not ungrammatical.
+Explain EVERY independently present clause error, missing finite verb, agreement, dangling modifier,
+causal jump, incorrect connector, unclear reference, absent first/second idea signpost, omitted outline
+chain and opinion redundancy. Accept precise formal equivalents, not rigid phrase substitution.
+Each correction quotes an EXACT original substring and supplies a specific Vietnamese explanation
+and a corrected sentence. Do not flag OCR uncertainty as a student error.
+Report actual application of taught theory with examples. Upgrade to a coherent four-paragraph
+essay preserving the assigned position/ideas, with typed spans: yellow stance/attribution,
+blue functional connectors, green hedging; plain for other text. Extract4–6 useful collocations.
+No blanket praise, system narration or teacher-confirmation claim. For assessment only, include
+TR(or TA), CC, LR, GRA band scores0–9 in half-point steps with feedback justification.
+For homework band_scores must be empty. All student-facing text must be Vietnamese except essays,
+original quotes, suggestions and collocations.'''
+
+def validate_essay(result, original, spec, assessment=False):
+    if result.exercise != spec.exercise or result.original != original:
+        raise ValueError('Original essay/exercise identity changed')
+    if result.word_count != word_count(original):
+        raise ValueError('Model word count differs from deterministic count')
+    paragraphs = [p for p in re.split(r'\n\s*\n', original.strip()) if p.strip()]
+    if result.paragraph_count != len(paragraphs):
+        raise ValueError('Paragraph count differs from source text')
+    for item in result.corrections:
+        if item.original not in original:
+            raise ValueError('Correction quotes text absent from the actual essay')
+    if assessment:
+        required = {'TA' if spec.task == 1 else 'TR', 'CC', 'LR', 'GRA'}
+        if set(result.band_scores) != required or any(not 0 <= v <= 9 or v*2 != int(v*2) for v in result.band_scores.values()):
+            raise ValueError('Invalid assessment band scores')
+    elif result.band_scores:
+        raise ValueError('Homework must not manufacture IELTS test scores')
+    minimum = spec.minimum_words or (150 if spec.task == 1 else 250)
+    if result.status == 'Đạt yêu cầu' and (result.word_count < minimum or result.paragraph_count != spec.paragraphs):
+        raise ValueError('Passing verdict contradicts length/paragraph requirements')
+    upgraded = '\n\n'.join(''.join(s.text for s in paragraph) for paragraph in result.upgraded_paragraphs)
+    if word_count(upgraded) < minimum:
+        raise ValueError('Upgraded essay below required word count')
+    return result
+
+def transcribe(ai, settings, binding, files, counts):
+    prompt = 'Transcribe each assigned exercise verbatim. Preserve paragraph breaks with blank lines. '
+    prompt += 'Unreadable/cropped handwriting => readable=false, do not reconstruct. A genuinely blank/uncompleted answer is readable and may be empty. '
+    prompt += json.dumps({'exercises':[{'exercise':e.exercise,'question':e.question} for e in binding.essays], 'student_files':counts})
+    result = ai.structured(settings.essay_model, prompt, Transcription, files)
+    validate_page_audit(result.page_audit, counts)
+    if sorted(x.exercise for x in result.essays) != sorted(x.exercise for x in binding.essays):
+        raise ValueError('Scan transcription lacks or duplicates an exercise')
+    for essay in result.essays:
+        validate_references(essay.pages, counts)
+        if not essay.readable:
+            raise ValueError('Handwriting cannot be read confidently')
+    return {x.exercise:x.original for x in result.essays}
+
+def grade_essay(ai, settings, spec, original, reference_files, assessment=False):
+    count = word_count(original)
+    paragraphs = len([p for p in re.split(r'\n\s*\n',original.strip()) if p.strip()])
+    prompt = RUBRIC + '\nTRUSTED SPECIFICATION:\n' + spec.model_dump_json()
+    prompt += f'\nassessment={assessment}; verified word_count={count}; paragraph_count={paragraphs}\n'
+    prompt += 'UNTRUSTED STUDENT ESSAY JSON:\n' + json.dumps(original,ensure_ascii=False)
+    for attempt in range(2):
+        result=validate_essay(ai.structured(settings.essay_model,prompt,EssayResult,reference_files),original,spec,assessment)
+        review_prompt='Independently audit the original essay against the TRUSTED SPECIFICATION and this proposed feedback. '
+        review_prompt+='Find omitted actual errors, false errors, missing first/second-idea signals, force constructions, inconsistent corrections/revision, unsupported numerical claims, or wrong learned outline requirements. '
+        review_prompt+='Do not prefer your style over a valid teacher/student equivalent. Approve only when every substantive identified issue is addressed, with no fabricated errors.\n'
+        review_prompt+=spec.model_dump_json()+'\nUNTRUSTED ORIGINAL:\n'+json.dumps(original,ensure_ascii=False)+'\nPROPOSED RESULT:\n'+result.model_dump_json()
+        review=ai.structured(settings.essay_model,review_prompt,QualityReview,reference_files)
+        if review.approved:
+            return result
+        if attempt==0:
+            prompt+='\nQuality findings to verify against the ORIGINAL and correct in this attempt:\n'+review.model_dump_json()
+    raise ValueError('Essay quality audit still identifies unresolved errors; do not publish')

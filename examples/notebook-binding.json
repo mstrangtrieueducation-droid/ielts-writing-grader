@@ -1,0 +1,27 @@
+{
+  "task_code": "W06",
+  "class_name": "IELTS 49",
+  "assignment_type": "notebook",
+  "lesson": 6,
+  "ready": false,
+  "source_verified": false,
+  "version": "B06-VO-v03-migration-example",
+  "source_reference": "Replace with the audited actual lesson source and checklist before activation",
+  "source_file_ids": ["REFERENCE_DRIVE_FILE_ID"],
+  "notebook_requirements": [
+    {"id": "assigned-model", "text": "Chép tay bài mẫu thực sự được giao, kèm bản dịch khi được yêu cầu."}
+  ],
+  "form_spreadsheet_id": "FORM_RESPONSE_SPREADSHEET_ID",
+  "form_tab": "IELTS WRITING - W06",
+  "name_column": "B",
+  "receipt_column": "A",
+  "notebook_columns": ["D", "E"],
+  "tracker_header_exact": "Replace with the exact live assignment header",
+  "roster_name_column": "B",
+  "roster_id_column": "A",
+  "roster_start_row": 7,
+  "roster_end_row": 30,
+  "next_writing_date": "2026-10-20",
+  "next_writing_evidence": "Replace with actual dashboard schedule evidence; example date is not a real class date",
+  "due_at": "2026-10-18T23:59:59+07:00"
+}
