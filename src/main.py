@@ -6,7 +6,7 @@ import uuid
 from pathlib import Path
 from .config import Settings
 from .schemas import Binding
-from .drive_service import DriveService, credentials
+from .drive_service import DriveService, credentials, state_credentials
 from .sheet_service import SheetService
 from .gemini_service import GeminiService
 from .state import StateStore
@@ -29,18 +29,19 @@ def main(argv=None):
     settings=Settings.from_env()
     creds=credentials(settings.service_account)
     sheets,drive,ai=SheetService(creds),DriveService(creds),GeminiService(settings)
+    state_drive=DriveService(state_credentials(settings.state_oauth)) if settings.state_oauth else drive
     bindings=sheets.guidelines(settings.guidelines_id)
     ai.preflight([settings.notebook_model,settings.essay_model])
     # Verify all folders exist and are visible without mutation.
-    for folder in (settings.state_folder,settings.incoming_folder,settings.processed_folder):
-        if drive.metadata(folder)['mimeType']!='application/vnd.google-apps.folder':
+    for client,folder in ((state_drive,settings.state_folder),(drive,settings.incoming_folder),(drive,settings.processed_folder)):
+        if client.metadata(folder)['mimeType']!='application/vnd.google-apps.folder':
             raise ValueError('Configured Drive folder ID is not a folder')
-    drive.assert_private_folder(settings.state_folder)
+    state_drive.assert_private_folder(settings.state_folder)
     if args.preflight:
         print(json.dumps({'preflight':True,'bindings':len(bindings),'live_writes':0}))
         return 0
-    ai.audit=lambda data:drive.write_json(settings.state_folder,'attempt-'+uuid.uuid4().hex+'.json',data)
-    report=Pipeline(settings,sheets,drive,ai,StateStore(drive,settings.state_folder),Dashboard(settings)).run(bindings)
+    ai.audit=lambda data:state_drive.write_json(settings.state_folder,'attempt-'+uuid.uuid4().hex+'.json',data)
+    report=Pipeline(settings,sheets,drive,ai,StateStore(state_drive,settings.state_folder),Dashboard(settings)).run(bindings)
     print(json.dumps(report,ensure_ascii=False))
     if not report['errors'] and report['completed']==0:
         return 0

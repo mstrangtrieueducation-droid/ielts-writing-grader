@@ -23,6 +23,7 @@ class Settings:
     max_jobs: int = 12
     requests_per_minute: int = 6
     retry_attempts: int = 6
+    state_oauth: dict | None = None
 
     @classmethod
     def from_env(cls):
@@ -46,6 +47,13 @@ class Settings:
             required('GEMINI_ESSAY_MODEL'), key, required('DASHBOARD_BASE_URL').rstrip('/'),
             mapping, Path(os.getenv('DASHBOARD_OUTPUT_DIR', 'dashboard_data')),
             int(os.getenv('MAX_JOBS_PER_RUN', '12')), int(os.getenv('GEMINI_RPM', '6')))
+        state_auth = os.getenv('GOOGLE_STATE_OAUTH_JSON', '').strip()
+        if state_auth:
+            state_auth = json.loads(state_auth)
+            if state_auth.get('type') != 'authorized_user' or not all(state_auth.get(k) for k in ('client_id','client_secret','refresh_token')):
+                raise ValueError('GOOGLE_STATE_OAUTH_JSON must contain an authorized-user refresh credential')
+            from dataclasses import replace
+            settings = replace(settings, state_oauth=state_auth)
         if settings.incoming_folder == settings.processed_folder or settings.state_folder in (
                 settings.incoming_folder, settings.processed_folder):
             raise ValueError('Incoming, processed and state folders must be different')

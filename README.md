@@ -40,6 +40,7 @@ Secrets trong Settings → Secrets and variables → Actions:
 |---|---|
 | `GEMINI_API_KEY` | API key từ Google AI Studio có quyền dùng hai model đã chọn |
 | `GCP_SA_KEY` | JSON service account; không dán vào chat hoặc commit vào repo |
+| `GOOGLE_STATE_OAUTH_JSON` | Tùy chọn: refresh credential của chủ Drive để tạo/đọc checkpoint trong My Drive bằng quyền `drive.file`; không dùng credential này để sửa tracker |
 | `DASHBOARD_MASTER_KEY` | Base64 của 32 byte ngẫu nhiên, giữ nguyên qua các lượt chạy |
 | `CLASS_SHEET_MAP_JSON` | JSON mapping lớp → tracker ID, gồm sáu lớp Cô đã cung cấp |
 
@@ -61,6 +62,8 @@ Repository variables:
 Model trong danh mục Google hiện tại có thể gồm `gemini-3.8-flash` và `gemini-3.1-pro-preview`. Đây là ví dụ cấu hình, không là cam kết tài khoản có quyền dùng hoặc preview không thay đổi; chạy preflight để xác nhận. Không dùng `gemini-1.5-flash/pro` trong triển khai mới.
 
 Service account cần Sheets API + Drive API và quyền Editor trên guideline/tracker/state/incoming/processed; quyền đọc các Form response, bài học, chart và tệp học sinh. Nếu tạo tệp state bằng service account, dùng **Shared Drive** hỗ trợ service account và cấp đúng quyền. Service account thường không có storage quota để tạo tệp mới trong My Drive: chia sẻ một thư mục My Drive đơn thuần không bảo đảm ghi state được. Không chuyển tệp scan gốc ra khỏi vị trí đang cần cho lớp; incoming nên là bản scan dành riêng cho pipeline.
+
+Khi tài khoản không có Shared Drive, cấu hình `GOOGLE_STATE_OAUTH_JSON` cho thư mục state do chính ứng dụng tạo trong My Drive của Cô. Writer state và audit dùng quyền `drive.file`; mọi thao tác Sheets/đọc nguồn/chuyển scan vẫn dùng service account. Chỉ chia sẻ incoming/processed và nguồn cần thiết cho service account. Không đưa token hoặc API key vào code/log công khai.
 
 Workflow giữ một writer bằng `concurrency`, không hủy job đang chạy; tối đa 12 hồ sơ/lượt, tiếp tục ở lượt sau. Không chạy nhiều repository hoặc CLI khác cùng ghi vào một state folder. Timeout job là 120 phút, vẫn có giới hạn GitHub runner, Gemini và Google API; checkpoint giải quyết việc tiếp tục, không xóa mọi quota.
 

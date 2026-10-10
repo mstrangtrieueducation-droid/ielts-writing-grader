@@ -1,6 +1,7 @@
 import io
 import json
 from google.oauth2 import service_account
+from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseUpload, MediaIoBaseDownload
 from .retry import retry
@@ -9,6 +10,11 @@ SCOPES = ['https://www.googleapis.com/auth/drive', 'https://www.googleapis.com/a
 
 def credentials(account):
     return service_account.Credentials.from_service_account_info(account, scopes=SCOPES)
+
+def state_credentials(account):
+    # Use the owner's existing drive.file grant for app-created private state in My Drive.
+    # Source Drive reads and Sheets edits still use the separately authorized service account.
+    return Credentials.from_authorized_user_info(account, scopes=['https://www.googleapis.com/auth/drive.file'])
 
 class DriveService:
     def __init__(self, creds):
