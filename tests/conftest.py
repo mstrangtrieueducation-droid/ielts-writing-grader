@@ -23,7 +23,7 @@ def settings(tmp_path):
     return SimpleNamespace(master_key=b'a'*32,output_dir=tmp_path/'dashboard_data',
         dashboard_base_url='https://example.test/ielts',class_sheets={'IELTS 45':'tracker123'},
         max_jobs=12,incoming_folder='incoming',processed_folder='processed',state_folder='state',
-        notebook_model='flash',essay_model='pro')
+        notebook_model='flash',essay_model='flash')
 
 def pdf():
     doc=fitz.open(); doc.new_page(); data=doc.tobytes(); doc.close(); return data

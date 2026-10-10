@@ -36,6 +36,11 @@ def test_one_pass_has_no_review_and_no_attachments(binding,settings):
     assert grade_essay(ai,settings,binding.essays[0],original,[('scan',b'private notebook','application/pdf')]).original==original
     assert ai.calls==[EssayResult]
 
+def test_essay_pro_config_rejected_without_paid_call(binding,settings):
+    settings.essay_model='gemini-3.1-pro-preview'
+    with pytest.raises(ValueError,match='no Pro fallback'):
+        grade_essay(None,settings,binding.essays[0],'Original text',[])
+
 def test_invalid_quote_held_without_paid_retry_even_after_restart(binding,settings):
     original=' '.join(['word']*260)
     class AI:

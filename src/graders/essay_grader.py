@@ -27,7 +27,17 @@ blue functional connectors, green hedging; plain for other text. Extract4–6 us
 No blanket praise, system narration or teacher-confirmation claim. For assessment only, include
 TR(or TA), CC, LR, GRA band scores0–9 in half-point steps with feedback justification.
 For homework band_scores must be empty. All student-facing text must be Vietnamese except essays,
-original quotes, suggestions and collocations.'''
+original quotes, suggestions and collocations.
+Read every paragraph and sentence, without limiting the number of genuine errors to save tokens.
+Before emitting JSON, complete these checks in the SAME response: task coverage and actual taught
+theory; paragraph roles and idea transitions; explanation/example logic; EACH full clause's grammar;
+word choice/reference; all numerical claims against trusted data; agreement between explanations,
+suggested corrections and final revision. Do not silently fix an error only in the revision.
+For Task1 do not impose Task2 opinion/reason templates. For Task2 distinguish paragraph contrast
+from the first/second supporting-idea signals WITHIN a paragraph, crediting functional equivalents.
+In taught_application_vi cite the student's actual phrase/paragraph, explain what was applied or
+missed and the necessary next step. Never substitute generic praise or a generic error checklist
+for individual feedback. Uncertain evidence stays held; never manufacture an error to sound strict.'''
 
 def source_quote(quote, original):
     if quote in original:
@@ -83,6 +93,8 @@ def transcribe(ai, settings, binding, files, counts):
     return {x.exercise:x.original for x in result.essays}
 
 def grade_essay(ai, settings, spec, original, reference_files, assessment=False, checkpoint=None, pending=None):
+    if 'flash' not in settings.essay_model.lower():
+        raise ValueError('Essay grading requires Flash; no Pro fallback')
     # The verified text specification replaces repeated full lesson/chart scans.
     # Fail closed if Task 1 numerical evidence has not been frozen as text.
     if spec.task == 1 and not spec.ground_truth.strip():
@@ -108,7 +120,8 @@ def grade_essay(ai, settings, spec, original, reference_files, assessment=False,
             return validate_essay(EssayResult.model_validate(pending['result']),original,spec,assessment)
         # Preserve unresolved legacy audits and sent/failed calls. Never silently repay.
         raise ValueError('Saved essay attempt is unresolved; no automatic paid regeneration')
-    work={'source_digest':source_digest,'status':'reserved','mode':'one_pass_text_v1'}
+    work={'source_digest':source_digest,'status':'reserved','mode':'flash_one_pass_text_v2',
+        'model':settings.essay_model}
     if checkpoint:
         checkpoint(work.copy())  # Durable BEFORE the charge; a crash cannot auto-regenerate.
     try:

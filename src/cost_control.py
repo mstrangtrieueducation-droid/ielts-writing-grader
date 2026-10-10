@@ -76,5 +76,5 @@ class ClassBudget:
         self.save()
 
 def estimate_class(students, essays_each, essay_in, essay_out, notebook_in, notebook_out):
-    return students*(essays_each*cost_vnd('gemini-3.1-pro-preview',essay_in,essay_out)
+    return students*(essays_each*cost_vnd('gemini-3.8-flash',essay_in,essay_out)
         +cost_vnd('gemini-3.8-flash',notebook_in,notebook_out))

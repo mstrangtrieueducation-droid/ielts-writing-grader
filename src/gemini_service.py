@@ -44,12 +44,10 @@ class GeminiService:
     def structured(self, model, prompt, schema, attachments=()):
         if os.getenv('GEMINI_GENERATION_ENABLED')!='true':
             raise ValueError('Paid Gemini generation is disabled; no grading API request sent')
-        if schema.__name__ in ('NotebookResult','Transcription') and 'flash' not in model.lower():
-            raise ValueError('Image checking/transcription must use Flash, never Pro')
+        if model!='gemini-3.8-flash':
+            raise ValueError('Flash-only grading is required; no Pro or other model fallback')
         if schema.__name__=='QualityReview':
             raise ValueError('Separate paid essay quality review is disabled in one-pass mode')
-        if 'pro' in model.lower() and attachments:
-            raise ValueError('Pro requests are text-only; attachments prohibited')
         if schema.__name__=='EssayResult' and attachments:
             raise ValueError('Essay grading is text-only; attachments prohibited')
         if not self.budget:
@@ -61,12 +59,13 @@ class GeminiService:
         for identity, data, mime in attachments:
             parts.extend([types.Part.from_text(text=f'EVIDENCE FILE_ID={identity}'),
                 types.Part.from_bytes(data=data, mime_type=mime)])
+        thinking='medium' if schema.__name__=='EssayResult' else 'low'
         config=types.GenerateContentConfig(system_instruction=SYSTEM, temperature=0.1,
             max_output_tokens=8192, response_mime_type='application/json',
             response_json_schema=schema.model_json_schema(),
-            thinking_config=types.ThinkingConfig(thinking_level='low'))
+            thinking_config=types.ThinkingConfig(thinking_level=thinking))
         fingerprint=hashlib.sha256(json.dumps({'model':model,'prompt':prompt,'system':SYSTEM,
-            'schema':schema.model_json_schema(),'output_limit':8192,'thinking':'low',
+            'schema':schema.model_json_schema(),'output_limit':8192,'thinking':thinking,
             'files':[(fid,hashlib.sha256(data).hexdigest(),mime) for fid,data,mime in attachments]},
             sort_keys=True).encode()).hexdigest()
         call_key=self.budget.key(fingerprint)

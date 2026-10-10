@@ -9,8 +9,8 @@ from conftest import FakeDrive,essay
 
 def test_price_estimates_include_output_and_do_not_claim_15k():
     assert cost_vnd('gemini-3.1-pro-preview',3000,2000)==780
-    assert estimate_class(25,1,3000,2000,10000,1000)==26812.5
-    assert estimate_class(25,2,5000,4000,20000,2000)==90025
+    assert estimate_class(25,1,3000,2000,10000,1000)==13650
+    assert estimate_class(25,2,5000,4000,20000,2000)==39000
 
 def test_durable_class_budget_across_jobs_and_restarts(binding):
     drive=FakeDrive();store=StateStore(drive,'state')
@@ -52,35 +52,37 @@ def test_generation_saved_usage_replayed_without_second_call(binding,monkeypatch
     result=essay(' '.join(['word']*260),binding.essays[0])
     ai,calls,drive,store=service(binding,monkeypatch,result.model_dump_json())
     records=[];ai.audit=records.append
-    assert ai.structured('gemini-3.1-pro-preview','prompt',EssayResult).original==result.original
+    assert ai.structured('gemini-3.8-flash','prompt',EssayResult).original==result.original
     ai.budget=ClassBudget(store,binding,{'job_id':'test'})
-    assert ai.structured('gemini-3.1-pro-preview','prompt',EssayResult).original==result.original
+    assert ai.structured('gemini-3.8-flash','prompt',EssayResult).original==result.original
     assert len(calls)==1 and not calls[0]['contents'][0].inline_data
     assert calls[0]['config'].max_output_tokens==8192
-    assert calls[0]['config'].thinking_config.thinking_level==types.ThinkingLevel.LOW
+    assert calls[0]['config'].thinking_config.thinking_level==types.ThinkingLevel.MEDIUM
     assert records[0]['usage_metadata']['thoughts_token_count']==500
 
 def test_timeout_reserved_without_repeat_payment(binding,monkeypatch):
     ai,calls,drive,store=service(binding,monkeypatch,error=TimeoutError())
-    with pytest.raises(TimeoutError):ai.structured('gemini-3.1-pro-preview','prompt',EssayResult)
+    with pytest.raises(TimeoutError):ai.structured('gemini-3.8-flash','prompt',EssayResult)
     ai.budget=ClassBudget(store,binding,{'job_id':'test'})
     with pytest.raises(ValueError,match='no automatic retry'):
-        ai.structured('gemini-3.1-pro-preview','prompt',EssayResult)
+        ai.structured('gemini-3.8-flash','prompt',EssayResult)
     assert len(calls)==1
 
 def test_image_model_routing_blocked_before_network(binding,monkeypatch):
     ai,calls,*_=service(binding,monkeypatch)
-    with pytest.raises(ValueError,match='never Pro'):
+    with pytest.raises(ValueError,match='Flash-only'):
         ai.structured('gemini-3.1-pro-preview','prompt',NotebookResult)
+    with pytest.raises(ValueError,match='Flash-only'):
+        ai.structured('gemini-3.1-pro-preview','prompt',EssayResult)
     with pytest.raises(ValueError,match='attachments prohibited'):
-        ai.structured('gemini-3.1-pro-preview','prompt',EssayResult,[('notes',b'pdf','application/pdf')])
+        ai.structured('gemini-3.8-flash','prompt',EssayResult,[('notes',b'pdf','application/pdf')])
     with pytest.raises(ValueError,match='quality review is disabled'):
-        ai.structured('gemini-3.1-pro-preview','prompt',QualityReview)
+        ai.structured('gemini-3.8-flash','prompt',QualityReview)
     assert not calls
 
 def test_invalid_json_cached_without_paid_repair(binding,monkeypatch):
     ai,calls,drive,store=service(binding,monkeypatch,response='invalid JSON')
     for _ in range(2):
-        with pytest.raises(ValueError):ai.structured('gemini-3.1-pro-preview','prompt',EssayResult)
+        with pytest.raises(ValueError):ai.structured('gemini-3.8-flash','prompt',EssayResult)
         ai.budget=ClassBudget(store,binding,{'job_id':'test'})
     assert len(calls)==1
