@@ -38,6 +38,18 @@ def test_prior_tracker_feedback_guard_preserves_populated_old_section():
     assert not Source('✅ ĐÃ NỘP\n— NHẬN XÉT GV —').has_prior_grading(None,binding,{'row':7})
     assert Source('✅ ĐÃ NỘP\n— NHẬN XÉT GV —\nVở chưa đạt.').has_prior_grading(None,binding,{'row':7})
 
+def test_failed_private_pilot_cannot_be_delivered_by_regular_run(binding,settings,monkeypatch):
+    from test_pipeline import components
+    from src.pilot import run_pilot
+    pipeline,drive,sheets,dashboard,store=components(settings,[['Time','Name','Notes','Essay'],['09/10/2026 23:00:00','Nguyễn Test','notebook_file_123','Essay']])
+    monkeypatch.setattr(pipeline,'grade',lambda *_:(_ for _ in ()).throw(ValueError('Quote validation failed')))
+    with pytest.raises(ValueError,match='Quote validation'):
+        run_pilot(pipeline,[binding],{'class_name':binding.class_name,'task_code':binding.task_code,'student_ids':['S1']})
+    state=next(iter(store.jobs.values()))
+    assert state['pilot_review']['delivery_authorized'] is False
+    assert pipeline.run([binding])['errors']
+    assert not dashboard.payloads and not sheets.blocks
+
 def test_binding_requires_explicit_copy_scope(binding):
     from pydantic import ValidationError
     data=binding.model_dump();data['notebook_copy_scope']=''
