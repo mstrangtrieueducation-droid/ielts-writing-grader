@@ -1,7 +1,7 @@
 import json
 import re
 from ..schemas import EssayResult, Transcription, QualityReview
-from ..parsers import word_count
+from ..parsers import word_count, essay_paragraphs
 from ..media import validate_page_audit, validate_references
 
 RUBRIC = '''Assess strictly against the actual assigned teacher theory, outline and chart ground truth.
@@ -31,7 +31,7 @@ def validate_essay(result, original, spec, assessment=False):
         raise ValueError('Original essay/exercise identity changed')
     if result.word_count != word_count(original):
         raise ValueError('Model word count differs from deterministic count')
-    paragraphs = [p for p in re.split(r'\n\s*\n', original.strip()) if p.strip()]
+    paragraphs = essay_paragraphs(original)
     if result.paragraph_count != len(paragraphs):
         raise ValueError('Paragraph count differs from source text')
     for item in result.corrections:
@@ -67,15 +67,17 @@ def transcribe(ai, settings, binding, files, counts):
 
 def grade_essay(ai, settings, spec, original, reference_files, assessment=False):
     count = word_count(original)
-    paragraphs = len([p for p in re.split(r'\n\s*\n',original.strip()) if p.strip()])
+    paragraphs = len(essay_paragraphs(original))
     prompt = RUBRIC + '\nTRUSTED SPECIFICATION:\n' + spec.model_dump_json()
     prompt += f'\nassessment={assessment}; verified word_count={count}; paragraph_count={paragraphs}\n'
+    prompt += 'Keep the verified counts unchanged. Form paragraphs may use a single newline, with no blank line.\n'
     prompt += 'UNTRUSTED STUDENT ESSAY JSON:\n' + json.dumps(original,ensure_ascii=False)
     for attempt in range(2):
         result=validate_essay(ai.structured(settings.essay_model,prompt,EssayResult,reference_files),original,spec,assessment)
         review_prompt='Independently audit the original essay against the TRUSTED SPECIFICATION and this proposed feedback. '
         review_prompt+='Find omitted actual errors, false errors, missing first/second-idea signals, force constructions, inconsistent corrections/revision, unsupported numerical claims, or wrong learned outline requirements. '
         review_prompt+='Do not prefer your style over a valid teacher/student equivalent. Approve only when every substantive identified issue is addressed, with no fabricated errors.\n'
+        review_prompt+=f'\nVerified word_count={count}; paragraph_count={paragraphs}. Form paragraph breaks may be single newlines.\n'
         review_prompt+=spec.model_dump_json()+'\nUNTRUSTED ORIGINAL:\n'+json.dumps(original,ensure_ascii=False)+'\nPROPOSED RESULT:\n'+result.model_dump_json()
         review=ai.structured(settings.essay_model,review_prompt,QualityReview,reference_files)
         if review.approved:

@@ -203,7 +203,7 @@ class Pipeline:
                 # Existing frozen deliveries resume even if the incoming scan was moved just before a crash.
                 current_ids={self.store.identity(binding,s) for s,_ in sources}
                 resumed=[s for s in self.store.jobs.values() if s['binding']['class_name']==binding.class_name
-                    and s['binding']['task_code']==binding.task_code and s['phase']!='complete' and s['job_id'] not in current_ids]
+                    and s['binding']['task_code']==binding.task_code and s['phase']!='complete' and not s.get('invalidation') and s['job_id'] not in current_ids]
                 for s in resumed:
                     if s['student']['id'] in {r['id'] for r in roster}:
                         sources.append((next(r for r in roster if r['id']==s['student']['id']),s['source']))

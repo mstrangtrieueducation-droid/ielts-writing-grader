@@ -62,6 +62,13 @@ def drive_ids(value):
 def word_count(text):
     return len(re.findall(r"[A-Za-z0-9]+(?:['’.-][A-Za-z0-9]+)*", text))
 
+def essay_paragraphs(text):
+    # Form text often separates paragraphs with one newline. Preserve the original;
+    # if blank lines are present, single newlines within those paragraphs are wrapping.
+    text=text.strip().replace('\r\n','\n').replace('\r','\n')
+    separator=r'\n\s*\n' if re.search(r'\n\s*\n',text) else r'\n'
+    return [p for p in re.split(separator,text) if p.strip()]
+
 def digest(value):
     return hashlib.sha256(value.encode()).hexdigest()
 

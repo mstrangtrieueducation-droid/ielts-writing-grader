@@ -1,10 +1,19 @@
 import pytest
 from src.graders.essay_grader import grade_essay
 from src.schemas import EssayResult, QualityReview
+from src.parsers import essay_paragraphs
 import src.pipeline as module
 from src.pipeline import Pipeline
 from src.state import StateStore
 from conftest import FakeDrive, FakeSheets, FakeDashboard, essay
+
+def test_form_single_newline_paragraphs_preserve_four_paragraphs():
+    text='Introduction.\r\nOverview.\r\nFirst detail.\r\nSecond detail.'
+    assert len(essay_paragraphs(text))==4
+    assert text=='Introduction.\r\nOverview.\r\nFirst detail.\r\nSecond detail.'
+
+def test_blank_line_paragraphs_allow_wrapped_lines():
+    assert len(essay_paragraphs('Introduction\nwrapped line.\n\nOverview.\n\nDetail one.\n\nDetail two.'))==4
 
 def test_quality_audit_requires_resolution(binding,settings):
     original=' '.join(['word']*260)
