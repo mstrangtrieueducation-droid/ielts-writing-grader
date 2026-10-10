@@ -3,6 +3,8 @@ from ..schemas import NotebookResult
 from .copy_grader import validate_check
 
 def grade_vocabulary(ai, settings, binding, student_files, reference_files, counts):
+    if 'flash' not in settings.notebook_model.lower():
+        raise ValueError('Vocabulary image checks require a Flash model; Pro is prohibited')
     prompt = '''Check ONLY the assigned vocabulary and fields explicitly required for each word.
     Identify English spelling, IPA, Vietnamese meaning, collocations/examples when assigned.
     Return one item per required word ID; report missing words/fields precisely, with readable
@@ -13,7 +15,7 @@ def grade_vocabulary(ai, settings, binding, student_files, reference_files, coun
     result = validate_check(ai.structured(settings.notebook_model, prompt, NotebookResult,
         reference_files+student_files), binding.vocabulary, counts)
     if any(x.status not in ('complete', 'uncertain') for x in result.items):
-        second = validate_check(ai.structured(settings.essay_model, prompt+' Independently recheck all pages.',
+        second = validate_check(ai.structured(settings.notebook_model, prompt+' Independently recheck all pages.',
             NotebookResult, reference_files+student_files), binding.vocabulary, counts)
         if {x.id:x.status for x in result.items} != {x.id:x.status for x in second.items}:
             raise ValueError('Independent vocabulary audits disagree')

@@ -23,58 +23,57 @@ def test_model_quote_recovers_only_unique_source_whitespace():
     with pytest.raises(ValueError,match='absent or ambiguous'):
         source_quote('higher scores','higher  scores; higher   scores')
 
-def test_quality_audit_requires_resolution(binding,settings):
+def test_one_pass_has_no_review_and_no_attachments(binding,settings):
     original=' '.join(['word']*260)
     class AI:
         def __init__(self): self.calls=[]
-        def structured(self,model,prompt,schema,*_):
+        def structured(self,model,prompt,schema,attachments):
             self.calls.append(schema)
-            return essay(original,binding.essays[0]) if schema is EssayResult else QualityReview(approved=False,issues=['Chưa nhận xét tín hiệu mở ý thứ nhất.'])
+            assert schema is EssayResult and attachments==()
+            assert 'check every original clause' in prompt
+            return essay(original,binding.essays[0])
     ai=AI()
-    with pytest.raises(ValueError,match='quality audit'): grade_essay(ai,settings,binding.essays[0],original,[])
-    assert ai.calls==[EssayResult,QualityReview]*3
+    assert grade_essay(ai,settings,binding.essays[0],original,[('scan',b'private notebook','application/pdf')]).original==original
+    assert ai.calls==[EssayResult]
 
-def test_invalid_model_quote_is_repaired_before_quality_audit(binding,settings):
+def test_invalid_quote_held_without_paid_retry_even_after_restart(binding,settings):
     original=' '.join(['word']*260)
     class AI:
         def __init__(self): self.calls=[]
         def structured(self,model,prompt,schema,*_):
             self.calls.append(schema)
-            if schema is QualityReview: return QualityReview(approved=True,issues=[])
             result=essay(original,binding.essays[0])
-            if len(self.calls)==1:
-                from src.schemas import Correction
-                result.corrections=[Correction(section='Detail',original='invented quote',error='Invalid quote',suggested='word')]
-            else: assert 'failed validation' in prompt
+            from src.schemas import Correction
+            result.corrections=[Correction(section='Detail',original='invented quote',error='Invalid quote',suggested='word')]
             return result
     ai=AI()
-    assert grade_essay(ai,settings,binding.essays[0],original,[]).original==original
-    assert ai.calls==[EssayResult,EssayResult,QualityReview]
+    checkpoints=[]
+    with pytest.raises(ValueError,match='absent'):
+        grade_essay(ai,settings,binding.essays[0],original,[],checkpoint=checkpoints.append)
+    assert checkpoints[0]['status']=='reserved' and checkpoints[-1]['status']=='held'
+    with pytest.raises(ValueError,match='no automatic paid'):
+        grade_essay(ai,settings,binding.essays[0],original,[],pending=checkpoints[-1])
+    assert ai.calls==[EssayResult]
 
-def test_quality_audit_passes_verified_result(binding,settings):
+def test_one_pass_validated_checkpoint_reused_without_model(binding,settings):
     original=' '.join(['word']*260)
     class AI:
         def structured(self,model,prompt,schema,*_):
-            return essay(original,binding.essays[0]) if schema is EssayResult else QualityReview(approved=True,issues=[])
-    assert grade_essay(AI(),settings,binding.essays[0],original,[]).word_count==260
-
-def test_saved_review_resumes_without_losing_candidate_or_accepting_changed_source(binding,settings):
-    original=' '.join(['word']*260)
+            return essay(original,binding.essays[0])
     checkpoints=[]
-    class UnresolvedAI:
-        def structured(self,model,prompt,schema,*_):
-            return essay(original,binding.essays[0]) if schema is EssayResult else QualityReview(approved=False,issues=['Clarify comparison scope.'])
-    with pytest.raises(ValueError,match='quality audit'):
-        grade_essay(UnresolvedAI(),settings,binding.essays[0],original,[],checkpoint=checkpoints.append)
-    class ResumedAI:
-        def structured(self,model,prompt,schema,*_):
-            if schema is EssayResult:
-                assert 'Resume this saved proposed result' in prompt and 'Clarify comparison scope.' in prompt
-                return essay(original,binding.essays[0])
-            return QualityReview(approved=True,issues=[])
-    assert grade_essay(ResumedAI(),settings,binding.essays[0],original,[],pending=checkpoints[-1]).original==original
+    grade_essay(AI(),settings,binding.essays[0],original,[],checkpoint=checkpoints.append)
+    assert grade_essay(None,settings,binding.essays[0],original,[],pending=checkpoints[-1]).word_count==260
+
+def test_unresolved_legacy_review_preserved_without_regeneration(binding,settings):
+    original=' '.join(['word']*260)
+    from src.parsers import digest
+    pending={'source_digest':digest(original+'\0'+binding.essays[0].model_dump_json()+'\0False'),
+        'result':essay(original,binding.essays[0]).model_dump(mode='json'),
+        'review':QualityReview(approved=False,issues=['Clarify comparison scope.']).model_dump()}
+    with pytest.raises(ValueError,match='no automatic paid'):
+        grade_essay(None,settings,binding.essays[0],original,[],pending=pending)
     with pytest.raises(ValueError,match='frozen original'):
-        grade_essay(ResumedAI(),settings,binding.essays[0],original+' changed',[],pending=checkpoints[-1])
+        grade_essay(None,settings,binding.essays[0],original+' changed',[],pending=pending)
 
 def test_assessment_has_no_notebook_gate_and_moves_only_after_delivery(binding,settings,monkeypatch):
     binding=binding.model_copy(update={'assignment_type':'assessment','task_code':'TEST3'})

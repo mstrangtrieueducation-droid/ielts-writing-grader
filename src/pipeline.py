@@ -118,6 +118,8 @@ class Pipeline:
             state['payload']=self.payload(binding,student,source,'too_late',TOO_LATE)
             self.store.save(state)
             return
+        if self.ai is not None and hasattr(self.ai,'bind_budget'):
+            self.ai.bind_budget(self.store,binding,state)
         references=self.files(binding.source_file_ids)
         checksums={fid:hashlib.sha256(data).hexdigest() for fid,data,_ in references}
         if state.get('source_checksums') and state['source_checksums']!=checksums:
@@ -175,11 +177,10 @@ class Pipeline:
                 raise ValueError(f'Exercise {spec.exercise} source is absent; awaiting verification')
             if binding.assignment_type!='assessment' and not receipt_allowed(binding,parse_receipt(source['received_at'])):
                 raise ValueError('Original receipt no longer eligible')
-            model_refs=references+self.files([fid for fid in spec.chart_file_ids if fid not in binding.source_file_ids])
             def checkpoint(work):
                 state.setdefault('essay_work',{})[key]=work
                 self.store.save(state)
-            result=grade_essay(self.ai,self.settings,spec,source['essay_texts'][key],model_refs,binding.assignment_type=='assessment',checkpoint,state.get('essay_work',{}).get(key))
+            result=grade_essay(self.ai,self.settings,spec,source['essay_texts'][key],(),binding.assignment_type=='assessment',checkpoint,state.get('essay_work',{}).get(key))
             state['essay_results'][key]=result.model_dump(mode='json')
             self.store.save(state)
         state['payload']=self.payload(binding,student,source,'graded',notebook_summary,

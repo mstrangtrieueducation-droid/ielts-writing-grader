@@ -18,9 +18,9 @@ Mã nguồn chấm vở, sổ từ vựng, bài viết homework và PDF kiểm t
 
 `drive_service.py`, `sheet_service.py`: đọc nguồn đúng ID/range, phân trang Drive, giữ ghi chú thủ công, không ghi đè công thức, đọc lại chính xác sau ghi.
 
-`gemini_service.py`, `retry.py`: SDK Google GenAI, giới hạn request, exponential backoff có jitter/Retry-After, không retry lỗi 400/401/403 hay nội dung JSON không hợp lệ. Phản hồi thô và prompt được lưu riêng trên Drive trước validation, kể cả kết quả bị từ chối.
+`gemini_service.py`, `retry.py`: SDK Google GenAI, giới hạn request. Các thao tác đọc/ghi nguồn có backoff; riêng sinh kết quả trả phí chỉ gửi một lần, tắt cả retry SDK. Timeout/429/5xx hoặc JSON lỗi được giữ lại, không tự trả tiền để chạy lại. Phản hồi và token usage được lưu riêng trên Drive trước validation.
 
-`graders/`: kiểm tra vở, từ vựng, OCR và bài viết. Thiếu/đánh máy phải có hai lần đối chiếu độc lập toàn bộ trang; bất đồng hoặc ảnh chưa đọc rõ được giữ chờ. Bài viết có một vòng kiểm toán chất lượng độc lập và tối đa một lần sửa kết quả chưa công bố.
+`graders/`: mọi kiểm tra ảnh vở/từ vựng và OCR chỉ dùng Flash, kể cả lượt kiểm tra độc lập khi nghi thiếu/đánh máy. Bất đồng hoặc ảnh chưa đọc rõ được giữ chờ. Mỗi bài viết chỉ một lượt Pro với JSON Schema: tự soát trong cùng prompt, sau đó kiểm tra bằng mã về định danh, số từ/đoạn, trích dẫn và tiêu chí định lượng. Không gọi model kiểm toán/sửa lại riêng; kiểm tra bằng mã không thay thế kiểm toán ngữ nghĩa độc lập.
 
 `pipeline.py`, `state.py`: lưu phiên bản rubric, nguồn, receipt, kết quả và từng pha giao bài. Kết quả đã hoàn tất không tự chấm lại. Có lỗi tracker/Pages thì dùng kết quả đã lưu để giao lại.
 
@@ -54,10 +54,11 @@ Repository variables:
 | `FOLDER_STATE_ID` | Thư mục Drive riêng lưu checkpoint/prompt/raw output/bản Zalo; không chia sẻ công khai |
 | `FOLDER_INCOMING_SCAN_ID` | Thư mục scan chưa xử lý |
 | `FOLDER_PROCESSED_SCAN_ID` | Thư mục scan xử lý xong, khác incoming/state |
-| `GEMINI_NOTEBOOK_MODEL` | Model vision hỗ trợ structured output mà tài khoản thực sự có quyền dùng |
-| `GEMINI_ESSAY_MODEL` | Model reasoning/vision hỗ trợ structured output |
+| `GEMINI_NOTEBOOK_MODEL` | `gemini-3.8-flash`, duy nhất cho ảnh/vở/từ vựng/OCR |
+| `GEMINI_ESSAY_MODEL` | `gemini-3.1-pro-preview`, chấm chữ một lượt, không ảnh/PDF |
 | `DASHBOARD_BASE_URL` | URL Pages gốc, HTTPS, không có fragment |
 | `GRADING_ENABLED` | Chỉ đặt `true` sau preflight và nghiệm thu một bài thử |
+| `GEMINI_GENERATION_ENABLED` | Mặc định tắt; phải bật riêng mới được gửi yêu cầu sinh trả phí |
 
 Model trong danh mục Google hiện tại có thể gồm `gemini-3.8-flash` và `gemini-3.1-pro-preview`. Đây là ví dụ cấu hình, không là cam kết tài khoản có quyền dùng hoặc preview không thay đổi; chạy preflight để xác nhận. Không dùng `gemini-1.5-flash/pro` trong triển khai mới.
 
@@ -133,6 +134,27 @@ python tests/ui_smoke.py
 
 `tests/ui_smoke.py` dùng bài giả lập và local HTTP server; không tải/chấm bài thật, không cần credential. Test pipeline kiểm tra cutoff chính xác, không đọc PDF của bài quá muộn, khóa vở, lỗi định danh, source/paragraph/word count, giữ ghi chú, retry, mã hóa, tiếp tục giao bài và không chấm lại.
 
-Nếu lỗi: đọc `job-<hash>.json` trong state folder để biết phase/last_error; prompt/raw ở `attempt-*.json`. Không xóa job chỉ để chạy lại. `dashboard_verified`/`tracker_verified` tiếp tục giao từ kết quả cũ. Lỗi bài chất lượng/ảnh chưa rõ cần xác minh nguồn; lỗi 429/5xx tự backoff rồi tiếp tục lượt sau. Kết quả Zalo nằm trong `announcement-*.json`, trường `message_markdown`; chỉ sao chép gửi khi Cô đã đọc.
+Nếu lỗi: đọc `job-<hash>.json` trong state folder để biết phase/last_error; prompt/raw ở `attempt-*.json`, usage và phản hồi đã nhận cũng có trong cost ledger riêng. Không xóa job/ledger để chạy lại. `dashboard_verified`/`tracker_verified` tiếp tục giao từ kết quả cũ. Lỗi sinh kết quả, JSON hoặc nguồn chưa rõ giữ lại; không tự retry trả phí. Checkpoint đã gửi nhưng chưa biết kết quả giữ nguyên dự phòng chi phí. Hồ sơ pilot cũ còn vấn đề kiểm toán không tự được coi là đạt bởi việc đổi luồng.
+
+## Luồng tiết kiệm theo yêu cầu ngày 10/10/2026
+
+- Pro chỉ nhận `EssaySpec` bằng chữ (đề, lý thuyết đã học, dàn ý và dữ liệu biểu đồ đã xác minh), bài gõ chữ và rubric. Không đính kèm vở, PDF bài học hoặc ảnh biểu đồ vào lượt Pro. Task 1 thiếu ground truth dạng chữ thì giữ lại, không đoán.
+- Vở vẫn đọc đủ trang, không giảm trang để giảm tiền. Flash có thể có lượt thứ hai cho kết luận thiếu/đánh máy; dự trù cơ sở dưới đây tính một lượt vở, lượt thứ hai tăng tiền.
+- `cost_control.py` dự phòng chi phí trước mỗi yêu cầu, dùng token counter cho đầu vào cộng 20% + 256 token, output cap 8192 gồm suy luận. Sổ chi phí bền vững chung cho đúng lớp/buổi, không reset khi đổi học sinh, workflow hoặc authorization. Tiền chưa rõ tiếp tục chiếm dự phòng. Phản hồi nhận được được tái dùng mà không gọi lại.
+- Ngưỡng ứng dụng là **14.900đ/lớp/buổi**. Vượt dự phòng thì dừng trước gọi; có thể còn học sinh chưa chấm. Đây không phải cam kết hoàn tất cả lớp dưới 15.000đ, cũng không phải cap billing Google. Tỷ giá 26.000đ/USD chỉ giả định; sai khác hóa đơn/thuế chưa được nghiệm thu bằng lượt thật. Bảng giá được khóa đến 31/12/2026, hết hiệu lực giữ lại.
+- `thinking_level=low` và giới hạn output giảm rủi ro chi phí; JSON bị cắt vẫn giữ lại, không tự sinh lại. Chất lượng luồng mới chưa nghiệm thu bằng bài thật. Không bật tự động hoặc trả bài từ thay đổi mã này.
+
+Dự trù giấy theo [bảng giá Google](https://ai.google.dev/gemini-api/docs/pricing), Standard, <=200k input: Pro $2 input / $12 output; Flash $0,75 / $3,75 trên 1 triệu token đến 31/12/2026. Output **gồm suy luận và JSON**. Flash này rẻ khoảng 2,7 lần đầu vào và 3,2 lần đầu ra, không phải 20 lần.
+
+Giả định bài viết: 3.000–5.000 token đầu vào gồm rubric/lý thuyết/schema và 2.000–4.000 token đầu ra. Vở: 10.000–20.000 input và 1.000–2.000 output. Không dùng số từ bài gõ làm toàn bộ token bill.
+
+| Phạm vi | Dự trù VND |
+|---|---:|
+| Một bài Pro, một lượt | 780–1.508 |
+| Một vở Flash, một lượt | 292,5–585 |
+| 25 em, mỗi em 1 bài + vở | 26.812,5–52.325 |
+| 25 em, mỗi em 2 bài + vở | 46.312,5–90.025 |
+
+Các con số là kịch bản, không phải token đã đo hoặc mức phí bảo đảm. Kiểm tra lại vở, OCR bài viết tay, nguồn dài hơn, output dài hơn hoặc tỷ giá/thuế thay đổi sẽ làm tăng chi phí. Không chuyển sang model khác hoặc cắt bớt lỗi để làm vừa ngân sách nếu chưa có hướng dẫn của Cô.
 
 Hạn chế cần lưu ý: đây là chấm bằng AI có kiểm toán tự động, không bảo đảm không bỏ sót lỗi; cần nghiệm thu rubric bằng bài thật. Tệp quá lớn bị giữ lại thay vì bớt trang. Video không bị tải xuống hoặc được chấm phát âm bởi luồng này. Không có tự tách danh tính trong một PDF cả lớp, không chuyển ngầm dashboard cũ, không tự sửa bài mẫu của Cô.

@@ -8,6 +8,7 @@
   "version": "B06-VO-v03-migration-example",
   "source_reference": "Replace with the audited actual lesson source and checklist before activation",
   "source_file_ids": ["REFERENCE_DRIVE_FILE_ID"],
+  "notebook_copy_scope": "Copy only assigned teacher notes, model and translation when required. Exclude new homework questions/charts, blank worksheets and submission/tool instructions. Replace this boundary with the verified lesson scope before activation.",
   "notebook_requirements": [
     {"id": "assigned-model", "text": "Chép tay bài mẫu thực sự được giao, kèm bản dịch khi được yêu cầu."}
   ],

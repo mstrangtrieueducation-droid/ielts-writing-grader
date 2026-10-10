@@ -59,4 +59,6 @@ class Settings:
             raise ValueError('Incoming, processed and state folders must be different')
         if not settings.dashboard_base_url.startswith('https://') or settings.max_jobs < 1 or settings.requests_per_minute < 1:
             raise ValueError('Invalid dashboard URL or execution limits')
+        if settings.notebook_model!='gemini-3.8-flash' or settings.essay_model!='gemini-3.1-pro-preview':
+            raise ValueError('Only the dated Flash/Pro cost-controlled model pair is enabled')
         return settings

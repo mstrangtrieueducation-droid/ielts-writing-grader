@@ -16,6 +16,8 @@ def validate_check(result, requirements, counts):
     return result
 
 def grade_notebook(ai, settings, binding, student_files, reference_files, counts):
+    if 'flash' not in settings.notebook_model.lower():
+        raise ValueError('Notebook image checks require a Flash model; Pro is prohibited')
     prompt = 'Inspect every student page against ONLY this assigned checklist. Reconstruct out-of-order and interleaved pages. '
     prompt += 'Give each item an evidence-based finding; page_audit covers student files only. '
     prompt += 'Missing findings require a search of all pages, not an inference from page order.\n'
@@ -28,7 +30,7 @@ def grade_notebook(ai, settings, binding, student_files, reference_files, counts
     # A second independent full-page inspection guards against false missing/printed verdicts.
     if notebook_state(result) == 'fail':
         audit_prompt = prompt + '\nPerform an independent search for every assigned item, without relying on another reviewer.'
-        second = validate_check(ai.structured(settings.essay_model, audit_prompt, NotebookResult,
+        second = validate_check(ai.structured(settings.notebook_model, audit_prompt, NotebookResult,
             reference_files+student_files), binding.notebook_requirements, counts)
         original = {x.id:x.status for x in result.items}
         if original != {x.id:x.status for x in second.items}:

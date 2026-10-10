@@ -17,7 +17,24 @@ def test_second_notebook_audit_disagreement_holds(binding,settings):
     ai=AI()
     with pytest.raises(ValueError,match='disagree'):
         grade_notebook(ai,settings,binding,[],[],{'notebook_file_123':1})
-    assert ai.calls==['flash','pro']
+    assert ai.calls==['flash','flash']
+
+def test_pro_notebook_config_rejected_without_model(binding,settings):
+    settings.notebook_model='gemini-3.1-pro-preview'
+    with pytest.raises(ValueError,match='Pro is prohibited'):
+        grade_notebook(None,settings,binding,[],[],{})
+
+def test_vocabulary_failure_recheck_stays_flash(binding,settings):
+    from src.graders.vocab_grader import grade_vocabulary
+    binding=binding.model_copy(update={'vocabulary':binding.notebook_requirements})
+    class AI:
+        def __init__(self):self.calls=[]
+        def structured(self,model,*_):
+            self.calls.append(model)
+            return notebook('typed_or_printed')
+    ai=AI()
+    grade_vocabulary(ai,settings,binding,[],[],{'notebook_file_123':1})
+    assert ai.calls==['flash','flash']
 
 def test_rate_limiter_enforces_spacing():
     now=[10.0]; waits=[]
