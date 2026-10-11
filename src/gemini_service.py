@@ -108,7 +108,25 @@ class GeminiService:
         self.budget.reserve(call_key,model,counted.total_tokens,config.max_output_tokens,service_tier)
         self.limiter.wait()
         # Exactly one network generation attempt. Timeouts/429/5xx remain reserved, not repaid.
-        result=self.client.models.generate_content(model=model,contents=parts,config=config)
+        try:
+            result=self.client.models.generate_content(model=model,contents=parts,config=config)
+        except Exception as exc:
+            # Preserve the full reserve and provider diagnostics without request URLs,
+            # credentials or arbitrary exception details. Never infer a zero charge.
+            failure={'type':type(exc).__name__,'occurred_at':datetime.now(timezone.utc).isoformat()}
+            code=getattr(exc,'code',None)
+            status=getattr(exc,'status',None)
+            if isinstance(code,int):failure['http_code']=code
+            if isinstance(status,str) and status.replace('_','').isalnum():
+                failure['provider_status']=status[:80]
+            self.budget.data['calls'][call_key]['failure']=failure
+            self.budget.save()
+            if self.audit:
+                self.audit({'job_id':self.job_id,'model':model,'service_tier':service_tier,
+                    'prompt_sha256':hashlib.sha256(prompt.encode()).hexdigest(),
+                    'cost_call_key':call_key,'failed':True,'failure':failure,
+                    'response_text':None,'usage_metadata':None,'charge_confirmed':False})
+            raise
         usage=result.usage_metadata.model_dump(mode='json') if result.usage_metadata else {}
         response_tier=getattr(result,'service_tier',None)
         http_response=getattr(result,'sdk_http_response',None)

@@ -93,6 +93,21 @@ def test_timeout_reserved_without_repeat_payment(binding,monkeypatch):
         ai.structured('gemini-3.8-flash','prompt',EssayResult)
     assert len(calls)==1
 
+def test_provider_error_is_audited_without_releasing_reserve(binding,monkeypatch):
+    from google.genai.errors import ServerError
+    error=ServerError(503,{'error':{'status':'UNAVAILABLE','message':'private request details'}})
+    ai,calls,drive,store=service(binding,monkeypatch,error=error)
+    records=[];ai.audit=records.append
+    with pytest.raises(ServerError):ai.structured('gemini-3.8-flash','prompt',EssayResult)
+    saved=next(iter(ai.budget.data['calls'].values()))
+    assert saved['status']=='reserved' and 'accounted_vnd' not in saved
+    assert saved['failure']['http_code']==503 and saved['failure']['provider_status']=='UNAVAILABLE'
+    assert records[0]['charge_confirmed'] is False and 'private request details' not in str(records)
+    ai.budget=ClassBudget(store,binding,{'job_id':'test'})
+    with pytest.raises(ValueError,match='no automatic retry'):
+        ai.structured('gemini-3.8-flash','prompt',EssayResult)
+    assert len(calls)==1
+
 def test_image_model_routing_blocked_before_network(binding,monkeypatch):
     ai,calls,*_=service(binding,monkeypatch)
     with pytest.raises(ValueError,match='Flash-only'):
