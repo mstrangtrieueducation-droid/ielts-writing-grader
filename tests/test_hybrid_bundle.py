@@ -34,6 +34,26 @@ def audited(response):
         for correction in item['corrections']:correction['category']='grammar'
     return AuditedProEssayBundle.model_validate(data)
 
+def test_scoped_teacher_knowledge_reaches_gemini_but_not_historical_replay(binding,monkeypatch):
+    from src import lesson_packages
+    specs,texts,response=originals(binding)
+    context='Only this verified lesson teaches this comparison function.'
+    monkeypatch.setattr(lesson_packages,'resolve_package',lambda _: {'id':'TEST','version':'v08','teaching_context':context})
+    calls=[];states=[]
+    ai=SimpleNamespace(structured=lambda model,prompt,schema,attachments: (calls.append(prompt) or audited(response)))
+    settings=SimpleNamespace(essay_model='gemini-3.1-pro-preview')
+    grade_bundle(ai,settings,specs,texts,states.append)
+    assert context in calls[0]
+    assert calls[0].count(context)==1
+    frozen=states[-1].copy()
+    frozen.update(mode='hybrid-two-essays-v07-teaching-reference-register',prompt='Frozen earlier teacher context',prompt_sha256=digest('Frozen earlier teacher context'))
+    grade_bundle(ai,settings,specs,texts,states.append,frozen)
+    assert len(calls)==1
+    assert states[-1]['prompt']=='Frozen earlier teacher context'
+    monkeypatch.setattr(lesson_packages,'resolve_package',lambda _: None)
+    prompt,_=prepare_bundle(specs,texts)
+    assert context not in prompt
+
 def test_two_originals_one_request_durable_replay(binding):
     specs,texts,response=originals(binding)
     calls=[];work=[]
