@@ -1,0 +1,189 @@
+# Kept in the existing Writing repository: no engine/dashboard migration.
+# Configure GEMINI_API_KEY_PAID with the SAME value used by the other three lanes.
+# Existing budgets, GRADING_ENABLED and GEMINI_GENERATION_ENABLED remain authoritative.
+name: Grade IELTS Writing
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: Validate locally, preflight access, or grade Writing
+        type: choice
+        options: [validate, audit, grade]
+        default: validate
+  schedule:
+    - cron: '23 * * * *'
+permissions:
+  contents: write
+  pages: write
+  actions: read
+concurrency:
+  group: ielts-grading-single-writer
+  cancel-in-progress: false
+jobs:
+  grade:
+    if: github.event_name == 'workflow_dispatch' || vars.SPLIT_GRADING_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    env:
+      MODE: ${{ inputs.mode || 'grade' }}
+      GEMINI_API_KEY_FREE: ${{ secrets.GEMINI_API_KEY_FREE_IELTS_WRITING }}
+      GEMINI_API_KEY_PAID: ${{ secrets.GEMINI_API_KEY_PAID }}
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY_FREE_IELTS_WRITING }}
+      FREE_PROJECT_ID: ${{ vars.GEMINI_FREE_PROJECT_IELTS_WRITING }}
+      PAID_PROJECT_ID: ${{ vars.GEMINI_PAID_PROJECT }}
+      LEGACY_WORKFLOWS: grade_writing.yml
+      GRADING_ENABLED: ${{ vars.GRADING_ENABLED }}
+      GEMINI_GENERATION_ENABLED: ${{ vars.GEMINI_GENERATION_ENABLED }}
+      GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
+      GOOGLE_STATE_OAUTH_JSON: ${{ secrets.GOOGLE_STATE_OAUTH_JSON }}
+      DASHBOARD_MASTER_KEY: ${{ secrets.DASHBOARD_MASTER_KEY }}
+      CLASS_SHEET_MAP_JSON: ${{ secrets.CLASS_SHEET_MAP_JSON }}
+      FOLDER_INCOMING_SCAN_ID: ${{ vars.FOLDER_INCOMING_SCAN_ID }}
+      FOLDER_PROCESSED_SCAN_ID: ${{ vars.FOLDER_PROCESSED_SCAN_ID }}
+      FOLDER_STATE_ID: ${{ vars.FOLDER_STATE_ID }}
+      GUIDELINES_SPREADSHEET_ID: ${{ vars.GUIDELINES_SPREADSHEET_ID }}
+      GEMINI_NOTEBOOK_MODEL: ${{ vars.GEMINI_NOTEBOOK_MODEL }}
+      GEMINI_ESSAY_MODEL: ${{ vars.GEMINI_ESSAY_MODEL }}
+      GEMINI_ESSAY_BUNDLE: ${{ vars.GEMINI_ESSAY_BUNDLE || 'false' }}
+      GEMINI_ESSAY_SERVICE_TIER: ${{ vars.GEMINI_ESSAY_SERVICE_TIER || 'standard' }}
+      GEMINI_STUDENT_BUDGET_VND: ${{ vars.GEMINI_STUDENT_BUDGET_VND || '1000' }}
+      DASHBOARD_BASE_URL: ${{ vars.DASHBOARD_BASE_URL }}
+      GRADING_DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+      MAX_JOBS_PER_RUN: '12'
+      GEMINI_RPM: '6'
+      GITHUB_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Verify configuration and exclusive ownership
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python - <<'PY'
+          import os,json,urllib.request
+          mode=os.environ['MODE']
+          if mode=='validate':
+              print('Validation only; no provider or classroom requests.')
+              raise SystemExit(0)
+          for name in ('GEMINI_API_KEY_FREE','GEMINI_API_KEY_PAID','FREE_PROJECT_ID','PAID_PROJECT_ID'):
+              if not os.environ.get(name,'').strip():
+                  raise SystemExit('Missing configuration: '+name)
+          if os.environ['GEMINI_API_KEY_FREE']==os.environ['GEMINI_API_KEY_PAID']:
+              raise SystemExit('Free and paid credentials must be different.')
+          if os.environ['FREE_PROJECT_ID']==os.environ['PAID_PROJECT_ID']:
+              raise SystemExit('Quota is per project; use separate free and paid projects.')
+          if mode!='grade':
+              raise SystemExit(0)
+          base='https://api.github.com/repos/'+os.environ['GITHUB_REPOSITORY']
+          def read(path):
+              req=urllib.request.Request(base+path,headers={'Authorization':'Bearer '+os.environ['GH_TOKEN'],'Accept':'application/vnd.github+json'})
+              with urllib.request.urlopen(req,timeout=30) as r:return json.load(r)
+          for legacy in os.environ['LEGACY_WORKFLOWS'].split(','):
+              w=read('/actions/workflows/'+legacy)
+              if w['state']=='active':
+                  raise SystemExit('Cutover required: '+legacy+' is still enabled. No grading started.')
+              runs=read('/actions/workflows/'+legacy+'/runs?per_page=100')['workflow_runs']
+              if any(r['status']!='completed' for r in runs):
+                  raise SystemExit('A legacy run is still active/queued. No grading started.')
+          print('Credential names and exclusive workflow ownership checked; values not logged.')
+          PY
+          if [ "$MODE" = grade ]; then
+            test "$GRADING_ENABLED" = true || { echo 'Writing grading is not enabled'; exit 1; }
+            test "$GEMINI_GENERATION_ENABLED" = true || { echo 'Writing generation is not enabled'; exit 1; }
+          fi
+      - run: pip install -r requirements.txt
+      - name: Verify unchanged rules
+        run: python -m pytest -q
+      - name: Install dashboard verification browser
+        if: env.MODE != 'validate'
+        run: python -m playwright install --with-deps chromium
+      - name: Run Writing with free then paid quota failover
+        run: |
+          cat > "$RUNNER_TEMP/writing-key-pool.py" <<'PY'
+          import os,sys
+
+          class QuotaPool:
+              """Only definitive HTTP 429 is eligible for a second network attempt.
+              This wraps the SDK transport; source prompts, schema, cost reservations,
+              raw-response persistence and delivery validation stay inside the old engine.
+              """
+              def __init__(self,free,paid):self.free=free;self.paid=paid;self.current=free
+              def invoke(self,method,*args,**kwargs):
+                  try:return getattr(self.current.models,method)(*args,**kwargs)
+                  except Exception as exc:
+                      if getattr(exc,'code',None)!=429 or self.current is self.paid:raise
+                      self.current=self.paid
+                      print('{"event":"KEY_FAILOVER","lane":"ielts_writing","reason":"HTTP_429","tier":"paid"}')
+                      return getattr(self.current.models,method)(*args,**kwargs)
+              @property
+              def models(self):return ModelProxy(self)
+              def __getattr__(self,name):
+                  # Batch/file resource IDs belong to one project and must NEVER rotate.
+                  # Existing Batch recovery remains bound to the original paid project.
+                  return getattr(self.paid,name)
+
+          class ModelProxy:
+              def __init__(self,pool):self.pool=pool
+              def get(self,*args,**kwargs):return self.pool.invoke('get',*args,**kwargs)
+              def count_tokens(self,*args,**kwargs):return self.pool.invoke('count_tokens',*args,**kwargs)
+              def generate_content(self,*args,**kwargs):return self.pool.invoke('generate_content',*args,**kwargs)
+
+          def selftest():
+              class Rejected(Exception):
+                  def __init__(self,code):self.code=code
+              class Models:
+                  def __init__(self,fail=None):self.fail=fail;self.calls=[]
+                  def generate_content(self,**kw):
+                      self.calls.append(kw)
+                      if self.fail:raise self.fail
+                      return {'ok':True}
+              class Client:
+                  def __init__(self,fail=None):self.models=Models(fail)
+              f,p=Client(Rejected(429)),Client();pool=QuotaPool(f,p)
+              payload={'model':'unchanged','contents':['same prompt'],'config':{'schema':'same'}}
+              assert pool.models.generate_content(**payload)=={'ok':True}
+              assert f.models.calls==p.models.calls==[payload]
+              pool.models.generate_content(**payload)
+              assert len(f.models.calls)==1 and len(p.models.calls)==2
+              for exc in (TimeoutError(),Rejected(400),Rejected(403),Rejected(500),Rejected(503)):
+                  f,p=Client(exc),Client()
+                  try:QuotaPool(f,p).models.generate_content(**payload)
+                  except Exception:pass
+                  else:raise AssertionError('Non-quota failure retried')
+                  assert not p.models.calls
+              f,p=Client(Rejected(429)),Client(Rejected(429))
+              try:QuotaPool(f,p).models.generate_content(**payload)
+              except Rejected:pass
+              else:raise AssertionError('Paid quota rejection ignored')
+              assert len(f.models.calls)==len(p.models.calls)==1
+              print('Writing free/paid transport tests passed; no provider requests.')
+
+          if os.environ['MODE']=='validate':
+              selftest();raise SystemExit(0)
+          sys.path.insert(0,os.getcwd())
+          from google import genai
+          from google.genai import types
+          from src import main as entry
+          from src.gemini_service import GeminiService
+
+          class PooledGeminiService(GeminiService):
+              def __init__(self,settings):
+                  super().__init__(settings)
+                  paid=genai.Client(api_key=os.environ['GEMINI_API_KEY_PAID'],http_options=types.HttpOptions(
+                      timeout=180000,retry_options=types.HttpRetryOptions(attempts=1)))
+                  self.client=QuotaPool(self.client,paid)
+
+          # Dependency injection is confined to this new workflow process, not source edits.
+          entry.GeminiService=PooledGeminiService
+          try:
+              raise SystemExit(entry.main(['--preflight'] if os.environ['MODE']=='audit' else []))
+          except Exception as exc:
+              print('{"failed":true,"error_type":"'+type(exc).__name__+'"}',file=sys.stderr)
+              raise SystemExit(1)
+          PY
+          python "$RUNNER_TEMP/writing-key-pool.py"
