@@ -97,11 +97,10 @@ jobs:
             test "$GEMINI_GENERATION_ENABLED" = true || { echo 'Writing generation is not enabled'; exit 1; }
           fi
       - run: pip install -r requirements.txt
+      - name: Install dashboard verification browser
+        run: python -m playwright install --with-deps chromium
       - name: Verify unchanged rules
         run: python -m pytest -q
-      - name: Install dashboard verification browser
-        if: env.MODE != 'validate'
-        run: python -m playwright install --with-deps chromium
       - name: Run Writing with free then paid quota failover
         run: |
           cat > "$RUNNER_TEMP/writing-key-pool.py" <<'PY'
