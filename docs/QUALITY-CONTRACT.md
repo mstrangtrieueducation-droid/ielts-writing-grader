@@ -22,6 +22,8 @@ Mỗi kiểm tra số có bằng chứng ô và toán tử. Chương trình đ�
 
 Kiểm tra sửa âm thầm bắt viết hoa kiểu Uk→UK và dấu kết thúc đoạn. Các chú thích phải trích đúng nguồn. Trước **mọi lần ghi dashboard/Toàn diện** của lượt mới, chạy lại bộ kiểm tra từ raw đã lưu và so khớp nguyên payload; đổi nội dung sau kiểm tra bị giữ lại.
 
+Mọi số xuất hiện trong câu sửa, bài viết tham khảo và ví dụ cụm từ cũng phải có bằng chứng ô/quan hệ so sánh. Bộ kiểm tra tính lại và đối chiếu với toán tử thực sự viết trong câu, không nhận lời model tự khai rằng `exceeding` là `>=`. Số năm/thứ hạng không được dùng để hợp thức hóa một số lượng sai. Bắt đúng lỗi ở bài gốc nhưng viết lại sai vẫn bị giữ lại.
+
 ## Giữ lịch sử và giới hạn tiền
 
 Schema mới là `AuditedProEssayBundle`/`AuditedFlashEssayBundle`; schema cũ được giữ nguyên. Prompt, phiên bản hợp đồng và raw mới được lưu riêng. Lượt cũ đã trả, raw pilot bị từ chối, khoản sử dụng hoặc dự phòng chi phí không bị sửa hay phát lại bởi cập nhật này. Lượt lỗi mới chuyển held, giữ raw; không tự sửa bài chữa hay trả phí lần nữa. Các trường kiểm toán được giữ riêng trong checkpoint, không trở thành lời dẫn hệ thống trên bài học sinh.

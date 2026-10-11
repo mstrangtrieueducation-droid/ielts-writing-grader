@@ -212,10 +212,19 @@ class NumericEvidence(Strict):
     operator: Literal['eq', 'gt', 'ge', 'lt', 'le']
     value: float
 
+class GeneratedNumericEvidence(Strict):
+    location: str
+    quote: str = Field(min_length=1)
+    kind: Literal['cells', 'context']
+    cells: list[str]
+    operator: Literal['eq', 'gt', 'ge', 'lt', 'le']
+    value: float
+
 class AuditedBundledEssayFeedback(BundledEssayFeedback):
     corrections: list[AuditedCorrection]
     comparisons: list[ComparisonEvidence]
     numeric_evidence: list[NumericEvidence]
+    generated_numbers: list[GeneratedNumericEvidence]
 
 class AuditedProEssayBundle(ProEssayBundle):
     # New attempts only. Legacy schemas/checkpoints are immutable and remain readable.

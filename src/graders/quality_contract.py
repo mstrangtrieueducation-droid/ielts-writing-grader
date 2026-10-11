@@ -33,10 +33,16 @@ groups asserted for that value. Context is only for trusted question numbers (ye
 The program will recompute inequalities and exact values. A correct value for explicitly identified
 groups is accurate even if another value in the sentence is wrong: isolate claims. Loose true bounds
 may be imprecise but never incorrect. Correct values with unclear group order may be ambiguous.
+Return generated_numbers for EVERY numeral in ALL suggestions, revision paragraphs and collocation
+examples, with location, exact quote, kind cells/context, cells, operator, value. Quote enough context
+to identify each referenced row AND column unambiguously. All these generated assertions must be
+true against the trusted matrix; a correctly detected original error does not excuse a wrong rewrite.
+Context numbers may only be a stated top-ranking limit or a year actually given in the question;
+never label a wrong university count as a context number merely because it equals a year/ranking.
 Do not fix a real error only in the revision: include its source quote and explanation. In particular
 check abbreviations/proper-country capitalization and paragraph-final punctuation. Check suggestions,
 revision and collocation examples AGAIN within this response: none may retain/create a data error.
-For Task2 comparisons and numeric_evidence are empty; do not impose chart rules or Task1 templates.
+For Task2 comparisons, numeric_evidence and generated_numbers are empty; do not impose chart rules.
 Evidence arrays are private checks, never system narration in student-facing feedback.
 '''
 
@@ -47,6 +53,23 @@ def numbers(text):
     if re.search(r'\d,\d{1,2}(?!\d)',text):
         raise ValueError('Ambiguous decimal/list comma requires verified numeric notation')
     return [float(m.group().replace(',','')) for m in re.finditer(NUMBER,text)]
+
+def quoted_operator(text,value):
+    patterns=((r'\b(?:not exceed(?:s|ed|ing)?|not surpass(?:es|ed|ing)?|no more than)\s*'+NUMBER,'le'),
+        (r'\b(?:at least|no less than|no fewer than)\s*'+NUMBER,'ge'),
+        (r'\b(?:exceed(?:s|ed|ing)?|over|more than|above|greater than)\s*'+NUMBER,'gt'),
+        (r'\b(?:below|less than|fewer than|under)\s*'+NUMBER,'lt'),
+        (NUMBER+r'\s*%?\s*(?:or|and)\s*(?:above|higher|more)\b','ge'),
+        (NUMBER+r'\s*%?\s*(?:or|and)\s*(?:below|lower|less)\b','le'))
+    for pattern,op in patterns:
+        if any(numbers(m.group())[-1]==value for m in re.finditer(pattern,text,re.I)):return op
+    return 'eq'
+
+def named_rows(text,matrix):
+    def position(label):
+        offset=text.casefold().find(label.casefold().rstrip('s'))
+        return offset if offset>=0 else len(text)
+    return sorted((r for r in matrix['rows'] if mentions(text,r)),key=position)
 
 def chart_matrix(spec):
     """Compile only an explicit matrix, never infer cells from narrative/scan/OCR.
@@ -186,18 +209,13 @@ def validate_numeric_evidence(item,original,matrix):
                 raise ValueError('Numeric evidence references absent or duplicate chart cells')
             contexts=[u for u in re.split(r'(?<=[.!?])\s+|\n|\b(?:while|whereas|however)\b',original,flags=re.I) if check.original_claim in u]
             if len(contexts)==1:
-                named=[r for r in matrix['rows'] if mentions(contexts[0],r)]
+                named=named_rows(contexts[0],matrix)
                 for left,right in zip(named,named[1:]):
                     pair=r'\b'+re.escape(left)+r'\s*(?:,\s*)?(?:and|&)\s+'+re.escape(right)+r'\b'
                     if re.search(pair,contexts[0],re.I) and not {left,right}<={matrix['cells'][cid]['row'] for cid in evidence.cells}:
                         raise ValueError('Numeric evidence omits a group explicitly sharing the claim')
-            # Negated bounds are tested before positive bounds.
-            claim=check.original_claim
-            expected=None
-            for pattern,op in ((r'\b(?:not exceeding|not surpassing|no more than)\s*'+NUMBER,'le'),(r'\b(?:at least|no less than)\s*'+NUMBER,'ge'),(r'\b(?:exceeding|over|more than|above)\s*'+NUMBER,'gt'),(r'\b(?:below|less than)\s*'+NUMBER,'lt')):
-                matches=list(re.finditer(pattern,claim,re.I))
-                if any(numbers(m.group())[-1]==evidence.value for m in matches):expected=op;break
-            if expected and expected!=evidence.operator:raise ValueError('Numeric operator contradicts the original comparison')
+            if quoted_operator(check.original_claim,evidence.value)!=evidence.operator:
+                raise ValueError('Numeric operator contradicts the original comparison')
             truth=all({'eq':eq,'gt':gt,'ge':ge,'lt':lt,'le':le}[evidence.operator](matrix['cells'][cid]['value'],evidence.value) for cid in evidence.cells)
         linked[evidence.check_index].append((evidence,truth))
     for index,assertions in linked.items():
@@ -210,6 +228,41 @@ def validate_numeric_evidence(item,original,matrix):
             units=[u for u in re.split(r'(?<=[.!?])\s+|\n',original) if check.original_claim in u]
             if len(units)==1 and all(e.kind=='cells' and e.operator=='eq' and all(mentions(units[0],matrix['cells'][cid]['row']) and mentions(units[0],matrix['cells'][cid]['column']) for cid in e.cells) for e,_ in assertions):
                 raise ValueError('Explicitly identified correct values cannot be labelled ambiguous')
+
+def validate_generated_numbers(item,matrix):
+    if matrix is None:
+        if item.generated_numbers:raise ValueError('Task2 must not acquire generated chart evidence')
+        return
+    texts=generated_texts(item);covered={k:[] for k in texts}
+    for evidence in item.generated_numbers:
+        text=texts.get(evidence.location)
+        if text is None or evidence.quote not in text or evidence.value not in numbers(evidence.quote):
+            raise ValueError('Generated numeric evidence quote/value is absent')
+        if evidence.kind=='context':
+            number=re.escape(str(int(evidence.value))) if evidence.value.is_integer() else re.escape(str(evidence.value))
+            if evidence.cells or evidence.operator!='eq' or evidence.value not in matrix['context_numbers'] or not re.search(r'\b(?:top|in|for|during|year)\s*'+number+r'\b',evidence.quote,re.I):
+                raise ValueError('Generated context number lacks a verified year/ranking reference')
+            if re.search(r'\b(?:in|for|during|year)\s*'+number+r'\b',evidence.quote,re.I) and not 1000<=evidence.value<=9999:
+                raise ValueError('Generated year reference is not a year')
+        else:
+            if not evidence.cells or len(set(evidence.cells))!=len(evidence.cells) or not set(evidence.cells)<=set(matrix['cells']):
+                raise ValueError('Generated numeric evidence lacks real chart cells')
+            refs=[matrix['cells'][cid] for cid in evidence.cells]
+            if quoted_operator(evidence.quote,evidence.value)!=evidence.operator:
+                raise ValueError('Generated numeric operator contradicts the written assertion')
+            if not all(mentions(evidence.quote,c['row']) and mentions(evidence.quote,c['column']) for c in refs):
+                raise ValueError('Generated number lacks an explicit row/category association')
+            if not all({'eq':eq,'gt':gt,'ge':ge,'lt':lt,'le':le}[evidence.operator](c['value'],evidence.value) for c in refs):
+                raise ValueError('Generated number contradicts trusted chart arithmetic')
+            named=named_rows(evidence.quote,matrix)
+            for left,right in zip(named,named[1:]):
+                if re.search(r'\b'+re.escape(left)+r'\s*(?:,\s*)?(?:and|&)\s+'+re.escape(right)+r'\b',evidence.quote,re.I) and not {left,right}<={c['row'] for c in refs}:
+                    raise ValueError('Generated numeric evidence omits a grouped row')
+        for match in re.finditer(re.escape(evidence.quote),text):
+            covered[evidence.location].extend((match.start()+n.start(),match.start()+n.end()) for n in re.finditer(NUMBER,evidence.quote) if float(n.group().replace(',',''))==evidence.value)
+    for location,text in texts.items():
+        if any(m.span() not in covered[location] for m in re.finditer(NUMBER,text)):
+            raise ValueError('Generated numeral lacks verified source evidence')
 
 def validate_edit_coverage(item,original):
     revision='\n'.join(generated_texts(item)[f'revision:{i}'] for i in range(1,5))
@@ -233,4 +286,5 @@ def validate_quality_contract(item,original,spec):
     matrix=chart_matrix(spec)
     validate_comparisons(item,original,matrix)
     validate_numeric_evidence(item,original,matrix)
+    validate_generated_numbers(item,matrix)
     validate_edit_coverage(item,original)

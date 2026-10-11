@@ -72,7 +72,7 @@ def restore_bundle(bundle, specs, texts):
             for check in item.numeric_checks:
                 check.original_claim=source_quote(check.original_claim,original)
             validate_quality_contract(item,original,spec)
-        data=item.model_dump(exclude={'source_digest','comparisons','numeric_evidence'})
+        data=item.model_dump(exclude={'source_digest','comparisons','numeric_evidence','generated_numbers'})
         for correction in data['corrections']:
             correction.pop('category',None)  # Private QA classification, not student/system prose.
         data.update(original=original,word_count=word_count(original),

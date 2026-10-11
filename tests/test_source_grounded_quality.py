@@ -1,9 +1,9 @@
 import json
 from types import SimpleNamespace
 import pytest
-from src.schemas import AuditedProEssayBundle,AuditedBundledEssayFeedback,ComparisonEvidence,NumericEvidence,AuditedCorrection,LanguageCheck
+from src.schemas import AuditedProEssayBundle,AuditedBundledEssayFeedback,ComparisonEvidence,NumericEvidence,GeneratedNumericEvidence,AuditedCorrection,LanguageCheck
 from src.graders.quality_contract import (chart_matrix,chart_guide,validate_comparisons,
-    validate_numeric_evidence,validate_edit_coverage,QUALITY_CONTRACT)
+    validate_numeric_evidence,validate_generated_numbers,validate_edit_coverage,QUALITY_CONTRACT)
 from src.graders.essay_bundle import grade_bundle,prepare_bundle,verify_saved_quality,PROMPT_VERSION
 from src.graders.essay_grader import language_units
 from src.parsers import digest
@@ -17,7 +17,7 @@ def spec(binding):
 
 def item(binding,original='A full introduction.\nOverview.\nFirst detail.\nFinal detail.'):
     s=spec(binding); data=essay(original,s).model_dump(exclude={'original','word_count','paragraph_count','band_scores'})
-    data.update(source_digest=digest(original),numeric_checks=[],comparisons=[],numeric_evidence=[],language_checks=[])
+    data.update(source_digest=digest(original),numeric_checks=[],comparisons=[],numeric_evidence=[],generated_numbers=[],language_checks=[])
     return AuditedBundledEssayFeedback(**data)
 
 def comparison(quote,scope='table',key='',scope_quote='',targets=None,valid=True,relation='minimum',location='revision:1'):
@@ -143,6 +143,35 @@ def test_clarity_is_not_an_established_data_error(binding):
 def test_task2_not_forced_into_chart_scope(binding):
     value=item(binding);revision(value,'This is the greatest risk in this argument.')
     validate_comparisons(value,'Original.',None);validate_numeric_evidence(value,'Original.',None)
+    validate_generated_numbers(value,None)
+
+def test_wrong_or_unaudited_revised_number_never_released(binding):
+    value=item(binding);matrix=chart_matrix(spec(binding))
+    text='Law had a Tutor rating of 62%.';revision(value,text)
+    value.generated_numbers=[GeneratedNumericEvidence(location='revision:1',quote=text,kind='cells',cells=['r2c3'],operator='eq',value=62)]
+    with pytest.raises(ValueError,match='arithmetic'):validate_generated_numbers(value,matrix)
+    value.generated_numbers=[]
+    with pytest.raises(ValueError,match='lacks verified'):validate_generated_numbers(value,matrix)
+    text='Law had a Tutor rating of 76%.';revision(value,text)
+    value.generated_numbers=[GeneratedNumericEvidence(location='revision:1',quote=text,kind='cells',cells=['r2c3'],operator='eq',value=76)]
+    validate_generated_numbers(value,matrix)
+    text='Economics and Commerce Tutor ratings exceeded 90%.';revision(value,text)
+    value.generated_numbers=[GeneratedNumericEvidence(location='revision:1',quote=text,kind='cells',cells=['r1c3','r3c3'],operator='ge',value=90)]
+    with pytest.raises(ValueError,match='operator contradicts'):validate_generated_numbers(value,matrix)
+    value.generated_numbers[0].operator='gt'
+    with pytest.raises(ValueError,match='arithmetic'):validate_generated_numbers(value,matrix)
+    text='Economics and Commerce Tutor ratings were 90% or above.';revision(value,text)
+    value.generated_numbers=[GeneratedNumericEvidence(location='revision:1',quote=text,kind='cells',cells=['r1c3','r3c3'],operator='ge',value=90)]
+    validate_generated_numbers(value,matrix)
+
+def test_generated_number_cannot_misuse_year_as_university_count(binding):
+    value=item(binding);matrix=universities(binding)
+    text='Canada had 2011 Biology universities.';revision(value,text)
+    value.generated_numbers=[GeneratedNumericEvidence(location='revision:1',quote=text,kind='context',cells=[],operator='eq',value=2011)]
+    with pytest.raises(ValueError,match='year/ranking'):validate_generated_numbers(value,matrix)
+    text='The top 200 universities were surveyed in 2011.';revision(value,text)
+    value.generated_numbers=[GeneratedNumericEvidence(location='revision:1',quote=text,kind='context',cells=[],operator='eq',value=n) for n in (200,2011)]
+    validate_generated_numbers(value,matrix)
 
 def test_new_prompt_source_guide_and_historical_replay_remain_separate(binding):
     specs,texts,response=originals(binding)

@@ -30,7 +30,7 @@ def originals(binding):
 def audited(response):
     data=response.model_dump()
     for item in data['essays']:
-        item.update(comparisons=[],numeric_evidence=[])
+        item.update(comparisons=[],numeric_evidence=[],generated_numbers=[])
         for correction in item['corrections']:correction['category']='grammar'
     return AuditedProEssayBundle.model_validate(data)
 
