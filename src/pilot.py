@@ -123,6 +123,72 @@ def collect_batch_pilot(pipeline,bindings,selection):
 def payload_digest(payload):
     return digest(json.dumps(payload,ensure_ascii=False,sort_keys=True))
 
+def deliver_pilot_notebook(pipeline,bindings,selection):
+    """Return independently approved notebook work while essays remain held.
+
+    This is a component publication, never a completed grading job. Immutable
+    rejected essays and their quality gate remain untouched and undisclosed.
+    """
+    import os
+    import hashlib
+    from .schemas import NotebookResult
+    from .policy import notebook_state,check_suppression
+    from .delivery import feedback_block
+    if os.getenv('GEMINI_GENERATION_ENABLED')=='true':
+        raise ValueError('Notebook publication requires generation OFF')
+    binding=selected_binding(bindings,selection)
+    if binding.assignment_type!='homework':
+        raise ValueError('Component publication is homework-only')
+    spreadsheet=pipeline.settings.class_sheets[binding.class_name]
+    roster=pipeline.sheets.roster(spreadsheet,binding)
+    sources=pipeline.sources(binding,roster)
+    if pipeline.discovery_errors:
+        raise ValueError('Unresolved identity/receipt prevents notebook publication')
+    sid=selection['student_ids'][0]
+    found=[(student,source) for student,source in sources if student['id']==sid]
+    if len(found)!=1:
+        raise ValueError('Notebook source absent or ambiguous')
+    student,source=found[0]
+    state=pipeline.store.jobs.get(pipeline.store.identity(binding,student))
+    if not state or state.get('payload') or state['phase']=='complete':
+        raise ValueError('Only an incomplete unpublished essay job may return its notebook separately')
+    if Binding.model_validate(state['binding'])!=binding or source!=state['source'] or not receipt_allowed(binding,parse_receipt(source['received_at'])):
+        raise ValueError('Frozen notebook binding/source/receipt changed')
+    if pipeline.store.locked_notebook(binding,student):
+        raise ValueError('Notebook locked; cannot publish a pass')
+    result=NotebookResult.model_validate(state.get('notebook'))
+    if notebook_state(result)!='pass':
+        raise ValueError('Notebook must be verified complete')
+    review=state.get('notebook_publication_review',{})
+    if review.get('status')!='approved' or not review.get('delivery_authorized') or not review.get('quality_evidence'):
+        raise ValueError('Independent notebook approval is required')
+    if review.get('notebook_sha256')!=payload_digest(state['notebook']):
+        raise ValueError('Approved notebook result changed')
+    expected_files=set(binding.source_file_ids)|set(source['notebook_ids'])
+    if set(review.get('file_checksums',{}))!=expected_files:
+        raise ValueError('Notebook approval must cover every assigned and submitted file')
+    for fid in expected_files:
+        data,_=pipeline.drive.download(fid)
+        if hashlib.sha256(data).hexdigest()!=review['file_checksums'][fid]:
+            raise ValueError('Notebook/source file changed after independent review')
+    publication=state.setdefault('notebook_publication',{})
+    expected_payload=pipeline.payload(binding,student,source,'pending',
+        result.summary_vi+'\nBài viết: đang chờ trả bản chữa.')
+    payload=publication.get('payload') or expected_payload
+    # Regenerate semantic content from the exact reviewed notebook, never trust a
+    # separately supplied warning or any copied essay cards.
+    if {k:v for k,v in payload.items() if k!='graded_at'}!={k:v for k,v in expected_payload.items() if k!='graded_at'}:
+        raise ValueError('Notebook-only publication contains unapproved content')
+    check_suppression(payload)
+    publication['payload']=payload
+    pipeline.store.save(state)
+    publication['dashboard_evidence']=pipeline.dashboard.publish(payload)
+    pipeline.store.save(state)
+    publication['tracker_evidence']=pipeline.sheets.write_feedback(spreadsheet,binding,student,feedback_block(payload))
+    pipeline.store.save(state)
+    return {'notebooks_published':1,'essays_published':0,'model_generation_calls':0,
+        'tracker_verified':bool(publication['tracker_evidence'].get('exact_readback')),'grading_complete':False}
+
 def deliver_pilot(pipeline,bindings,selection):
     binding=selected_binding(bindings,selection)
     spreadsheet=pipeline.settings.class_sheets[binding.class_name]

@@ -1,5 +1,9 @@
 # Kiểm tra chất lượng chung cho luồng Flash → Pro
 
+## Trả riêng kết quả vở đã xác minh
+
+`deliver-pilot-notebook` chỉ công bố nhận xét vở đã được đối chiếu độc lập, khi bài viết của lượt thử còn giữ lại. Kiểm tra đúng nguồn/giờ nhận, khóa vở, dấu kiểm toàn bộ tệp, nội dung nhận xét đã duyệt. Mọi bài viết bị giữ lại vẫn ẩn; dashboard và Toàn diện chỉ ghi nhận xét vở và “Bài viết: đang chờ trả bản chữa.” Không đánh dấu job/lớp hoàn tất, không sửa raw hay hạ điều kiện nghiệm thu bài viết, không gọi model. Bằng chứng công bố vở nằm riêng trong `notebook_publication`; lần trả bài viết đầy đủ sau này vẫn phải qua mọi kiểm tra cũ. Cả hai chế độ công bố buộc tắt sinh trả phí. 126 kiểm thử đạt.
+
 ## Cập nhật 12/10: không bắt lỗi sai khi so sánh tổng riêng từng nhóm
 
 Prompt mới là `hybrid-two-essays-v05-fair-comparison-scope`. So sánh tổng **riêng từng ngành** qua các nước đã xác minh không đồng nghĩa với cộng mọi ngành để đếm số trường duy nhất. Sự trùng lặp giữa các ngành không tự làm phép so sánh thứ nhất sai. Cần đọc phạm vi toàn bài; thiếu rõ phạm vi có thể là đề nghị làm rõ, không mặc định là lỗi số liệu.
