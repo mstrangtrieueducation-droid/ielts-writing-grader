@@ -64,6 +64,7 @@ jobs:
       GEMINI_API_KEY_FREE: ${{ secrets.GEMINI_API_KEY_FREE_IELTS_WRITING }}
       GEMINI_API_KEY_PAID: ${{ secrets.GEMINI_API_KEY_PAID }}
       GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY_FREE_IELTS_WRITING }}
+      LEGACY_GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
       FREE_PROJECT_ID: ${{ vars.GEMINI_FREE_PROJECT_IELTS_WRITING }}
       PAID_PROJECT_ID: ${{ vars.GEMINI_PAID_PROJECT }}
       LEGACY_WORKFLOWS: grade_writing.yml
@@ -78,9 +79,11 @@ jobs:
       FOLDER_STATE_ID: ${{ vars.FOLDER_STATE_ID }}
       GUIDELINES_SPREADSHEET_ID: ${{ vars.GUIDELINES_SPREADSHEET_ID }}
       GEMINI_NOTEBOOK_MODEL: ${{ vars.GEMINI_NOTEBOOK_MODEL }}
-      GEMINI_ESSAY_MODEL: ${{ vars.GEMINI_ESSAY_MODEL }}
-      GEMINI_ESSAY_BUNDLE: ${{ vars.GEMINI_ESSAY_BUNDLE || 'false' }}
-      GEMINI_ESSAY_SERVICE_TIER: ${{ vars.GEMINI_ESSAY_SERVICE_TIER || 'standard' }}
+      GEMINI_ESSAY_MODEL: 'gemini-3.1-pro-preview'
+      GEMINI_ESSAY_REQUEST_MODE: 'per_essay_batch'
+      GEMINI_PRO_MAX_OUTPUT_TOKENS: '16384'
+      GEMINI_ESSAY_BUNDLE: 'false'
+      GEMINI_ESSAY_SERVICE_TIER: 'batch'
       GEMINI_STUDENT_BUDGET_VND: ${{ vars.GEMINI_STUDENT_BUDGET_VND || '1000' }}
       DASHBOARD_BASE_URL: ${{ vars.DASHBOARD_BASE_URL }}
       GRADING_DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
@@ -146,7 +149,7 @@ jobs:
               This wraps the SDK transport; source prompts, schema, cost reservations,
               raw-response persistence and delivery validation stay inside the old engine.
               """
-              def __init__(self,free,paid):self.free=free;self.paid=paid;self.current=free
+              def __init__(self,free,paid):self.free=free;self.paid=paid;self.current=free;self.resources=paid
               def invoke(self,method,*args,**kwargs):
                   try:return getattr(self.current.models,method)(*args,**kwargs)
                   except Exception as exc:
@@ -159,7 +162,15 @@ jobs:
               def __getattr__(self,name):
                   # Batch/file resource IDs belong to one project and must NEVER rotate.
                   # Existing Batch recovery remains bound to the original paid project.
-                  return getattr(self.paid,name)
+                  return getattr(self.resources,name)
+
+          def resource_owner(data,job_id):
+              saved=data.get('split_resource_projects',{}).get(job_id)
+              if saved:
+                  if saved not in ('legacy','shared'):raise ValueError('Unknown Batch project binding')
+                  return saved
+              old=any(b.get('job_id')==job_id for b in data.get('essay_batches',{}).values()) or any(c.get('job_id')==job_id and c.get('batch') for c in data.get('calls',{}).values())
+              return 'legacy' if old else 'shared'
 
           class ModelProxy:
               def __init__(self,pool):self.pool=pool
@@ -195,7 +206,11 @@ jobs:
               except Rejected:pass
               else:raise AssertionError('Paid quota rejection ignored')
               assert len(f.models.calls)==len(p.models.calls)==1
-              print('Writing free/paid transport tests passed; no provider requests.')
+              assert resource_owner({'essay_batches':{'b':{'job_id':'old'}}},'old')=='legacy'
+              assert resource_owner({'essay_batches':{'b':{'job_id':'old'}}},'new')=='shared'
+              assert resource_owner({'split_resource_projects':{'old':'shared'},'essay_batches':{'b':{'job_id':'old'}}},'old')=='shared'
+              f,p,l=Client(),Client(),Client();pool=QuotaPool(f,p);pool.resources=l;l.files='legacy-files';assert pool.files=='legacy-files'
+              print('Writing free/paid and durable Batch project tests passed; no provider requests.')
 
           if os.environ['MODE']=='validate':
               selftest();raise SystemExit(0)
@@ -211,11 +226,26 @@ jobs:
                   paid=genai.Client(api_key=os.environ['GEMINI_API_KEY_PAID'],http_options=types.HttpOptions(
                       timeout=180000,retry_options=types.HttpRetryOptions(attempts=1)))
                   self.client=QuotaPool(self.client,paid)
+                  self.legacy_resource_client=genai.Client(api_key=os.environ['LEGACY_GEMINI_API_KEY'],http_options=types.HttpOptions(
+                      timeout=180000,retry_options=types.HttpRetryOptions(attempts=1)))
+              def bind_budget(self,store,binding,state):
+                  super().bind_budget(store,binding,state)
+                  owner=resource_owner(self.budget.data,self.budget.job_id)
+                  if self.budget.data.setdefault('split_resource_projects',{}).get(self.budget.job_id)!=owner:
+                      self.budget.data['split_resource_projects'][self.budget.job_id]=owner
+                      self.budget.save()
+                  self.client.resources=self.legacy_resource_client if owner=='legacy' else self.client.paid
 
           # Dependency injection is confined to this new workflow process, not source edits.
           entry.GeminiService=PooledGeminiService
           try:
-              raise SystemExit(entry.main(['--preflight'] if os.environ['MODE']=='audit' else []))
+              if os.environ['MODE']=='audit':raise SystemExit(entry.main(['--preflight']))
+              generation=os.environ['GEMINI_GENERATION_ENABLED']
+              os.environ['GEMINI_GENERATION_ENABLED']='false'
+              try:collected=entry.main(['--collect-batches'])
+              finally:os.environ['GEMINI_GENERATION_ENABLED']=generation
+              graded=entry.main([])
+              raise SystemExit(max(collected or 0,graded or 0))
           except Exception as exc:
               print('{"failed":true,"error_type":"'+type(exc).__name__+'"}',file=sys.stderr)
               raise SystemExit(1)
