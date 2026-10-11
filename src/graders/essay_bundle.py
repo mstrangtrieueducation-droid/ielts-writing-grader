@@ -10,7 +10,8 @@ from ..pro_batch import BatchPending
 from .essay_grader import RUBRIC,LANGUAGE_AUDIT,NUMERICAL_AUDIT,language_units,validate_essay,source_quote
 from .quality_contract import QUALITY_CONTRACT,CONTRACT_VERSION,chart_matrix,chart_guide,validate_quality_contract
 
-PROMPT_VERSION='hybrid-two-essays-v04-source-grounded-quality'
+PROMPT_VERSION='hybrid-two-essays-v05-fair-comparison-scope'
+AUDITED_MODES={'hybrid-two-essays-v04-source-grounded-quality',PROMPT_VERSION}
 LEGACY_MODES={None,'hybrid-two-essays-v01','hybrid-two-essays-v02-static-and-clause-review',
     'hybrid-two-essays-v03-complete-and-scoped-review'}
 
@@ -24,7 +25,11 @@ def prepare_bundle(specs, texts, audited=True):
             raise ValueError('Both original essays are required before a bundled call')
         if spec.task==1 and not spec.ground_truth.strip():
             raise ValueError('Task 1 requires verified chart data in the text specification')
-        records.append({'specification':spec.model_dump(mode='json'),
+        specification=spec.model_dump(mode='json')
+        # Preserve source digests of already frozen bindings with no aggregation policy.
+        if spec.column_total_policy=='not_verified' and not spec.aggregation_scope_label:
+            specification.pop('column_total_policy');specification.pop('aggregation_scope_label')
+        records.append({'specification':specification,
             'source_digest':digest(original),'original':original,
             'word_count':word_count(original),'paragraph_count':len(essay_paragraphs(original)),
             'segments':language_units(original)})
@@ -87,9 +92,9 @@ def restore_bundle(bundle, specs, texts):
     return output
 
 def grade_bundle(ai, settings, specs, texts, checkpoint, pending=None):
-    if pending and pending.get('mode') not in LEGACY_MODES|{PROMPT_VERSION}:
+    if pending and pending.get('mode') not in LEGACY_MODES|AUDITED_MODES:
         raise ValueError('Unknown frozen bundle contract; preserve the attempt without regeneration')
-    audited=not pending or pending.get('mode')==PROMPT_VERSION
+    audited=not pending or pending.get('mode') in AUDITED_MODES
     if settings.essay_model=='gemini-3.1-pro-preview':
         schema=AuditedProEssayBundle if audited else ProEssayBundle
     elif settings.essay_model=='gemini-3.8-flash' and getattr(settings,'essay_bundle',False):
@@ -152,7 +157,7 @@ def verify_saved_quality(state,binding):
     work=state.get('bundle_work',{})
     if not work or work.get('mode') in LEGACY_MODES:
         return  # Old results retain their historical criteria and teacher pilot gate.
-    if work.get('mode')!=PROMPT_VERSION:
+    if work.get('mode') not in AUDITED_MODES:
         raise ValueError('Unknown delivery quality contract; result held')
     if work.get('status')!='validated' or work.get('quality_contract_version')!=CONTRACT_VERSION:
         raise ValueError('Source-grounded quality checkpoint is absent or unresolved')

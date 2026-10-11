@@ -24,6 +24,23 @@ Within-row/column claims MUST visibly say for/in/among/within/across the named s
 merely appearing in the subject does not restrict the comparison. scope_quote must quote that
 restricting phrase. A row_dominance claim explicitly covers all shown subjects/categories.
 Range means max minus min, not a minimum individual value. No unsupported sum of unique entities.
+Comparing SEPARATE subject totals across verified disjoint countries is different from adding
+subjects together to claim unique universities. Overlap BETWEEN subjects does not invalidate the
+first comparison. Never invent a ban on addition or require a different overview only because
+another accurate overview is possible. Read the whole table context before labelling global scope
+wrong; an unclear scope calls for clarification, not a false data-error accusation.
+When the trusted source explicitly authorizes additive counts across disjoint rows, column_totals
+provides computed totals. column_totals comparison targets are column labels, scope_key is empty,
+and scope_quote must visibly include the trusted aggregation_scope_label. Do not infer permission
+to sum percentages, overlapping groups or unique entities. Do not introduce aggregate numerals in
+rewrites: the current numerical schema audits individual cells, not aggregate values.
+row_dominance targets are ROW LABELS (never cell IDs), and scope_key is empty. table scope_key
+and scope_quote are empty. Return evidence for EVERY extreme, including collocation examples.
+Write self-contained suggestions/examples with named subjects and comparison scope; references
+such as 'its course' must not replace the named scope in evidence. Do not use generic superlative
+examples unless their scope is verifiable. Before finalizing, list every real change between the
+original and revision and ensure the explanation covers it, including paragraph-final full stops,
+proper-name capitalization, surveyed versus examined and who awards/receives a rating.
 All generated claims must be valid. Original incorrect extrema may be evidenced at location original
 with valid=false; this is required to support a data correction without numerals. Do not declare
 an ambiguous original definitively false by selecting only its least favourable interpretation.
@@ -112,8 +129,14 @@ def chart_matrix(spec):
             if isinstance(value,bool) or not isinstance(value,(int,float)) or not math.isfinite(value):
                 raise ValueError('Trusted chart cell must be a finite number')
             cells[f'r{ri}c{ci}']={'row':row,'column':column,'value':value}
-    return {'columns':columns,'rows':list(rows),'cells':cells,
+    matrix={'columns':columns,'rows':list(rows),'cells':cells,
             'context_numbers':sorted(set(numbers(spec.question)))}
+    if spec.column_total_policy=='additive_counts_across_disjoint_rows':
+        if not spec.aggregation_scope_label.strip():
+            raise ValueError('Verified aggregation requires a visible source scope label')
+        matrix['aggregation_scope_label']=spec.aggregation_scope_label
+        matrix['column_totals']={col:sum(c['value'] for c in cells.values() if c['column']==col) for col in columns}
+    return matrix
 
 def chart_guide(matrix):
     if matrix is None:return None
@@ -178,6 +201,17 @@ def validate_comparisons(item,original,matrix):
             ranges={k:max(c['value'] for c in cells.values() if c[axis]==k)-min(c['value'] for c in cells.values() if c[axis]==k) for k in labels}
             actual=all(ranges[t]==extreme(ranges.values()) for t in check.targets)
             if any(not mentions(check.quote,t) for t in check.targets):raise ValueError('Range quote lacks its category')
+        elif check.scope=='column_totals':
+            totals=matrix.get('column_totals')
+            label=matrix.get('aggregation_scope_label','')
+            if not totals or check.scope_key or not set(check.targets)<=set(totals):
+                raise ValueError('Column totals require source-verified additive counts')
+            if (not check.scope_quote or check.scope_quote not in check.quote
+                or label.casefold() not in check.scope_quote.casefold()
+                or not re.search(r'\btotal\b',check.quote,re.I)
+                or any(not mentions(check.quote,t) for t in check.targets)):
+                raise ValueError('Total comparison lacks its explicit aggregation scope')
+            actual=all(totals[t]==extreme(totals.values()) for t in check.targets)
         else:
             if check.scope_key or not set(check.targets)<=set(matrix['rows']):raise ValueError('Unknown dominance target')
             if not check.scope_quote or check.scope_quote not in check.quote or not re.search(r'\b(?:all|each|every|across)\b',check.scope_quote,re.I) or not re.search(r'\b(?:categories|subjects|disciplines|columns|fields)\b',check.scope_quote,re.I):

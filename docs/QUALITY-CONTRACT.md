@@ -1,5 +1,13 @@
 # Kiểm tra chất lượng chung cho luồng Flash → Pro
 
+## Cập nhật 12/10: không bắt lỗi sai khi so sánh tổng riêng từng nhóm
+
+Prompt mới là `hybrid-two-essays-v05-fair-comparison-scope`. So sánh tổng **riêng từng ngành** qua các nước đã xác minh không đồng nghĩa với cộng mọi ngành để đếm số trường duy nhất. Sự trùng lặp giữa các ngành không tự làm phép so sánh thứ nhất sai. Cần đọc phạm vi toàn bài; thiếu rõ phạm vi có thể là đề nghị làm rõ, không mặc định là lỗi số liệu.
+
+Nguồn phải xác nhận `column_total_policy=additive_counts_across_disjoint_rows` và cung cấp `aggregation_scope_label` trước khi chương trình tính tổng cột. Mặc định không cho cộng. Không suy ra quyền cộng tỷ lệ phần trăm hay nhóm trùng nhau. So sánh `column_totals` được kiểm tra theo tổng tính từ ma trận và phạm vi hiện trong câu. Số tổng trong câu viết lại chưa thuộc hợp đồng kiểm tra số; prompt không yêu cầu đưa những số tổng đó vào bài học sinh.
+
+Các gợi ý và ví dụ phải tự đủ nghĩa, có chủ thể và phạm vi so sánh. Prompt yêu cầu rà thay đổi giữa bài gốc và bản sửa để không bỏ chú thích viết hoa, dấu cuối đoạn, nghĩa từ và vai trò trong cách diễn đạt đánh giá. Kết quả vẫn phải qua nghiệm thu độc lập. Prompt v04 đã đóng băng tiếp tục chịu kiểm tra, không bị hạ thành kết quả cũ miễn kiểm tra. 117 kiểm thử đạt; chưa có thêm lượt sinh trả phí với v05.
+
 Ngày 11/10/2026, prompt mới `hybrid-two-essays-v04-source-grounded-quality` thay cách kiểm tra chỉ dựa vào JSON đủ mục. Áp dụng cho lượt bundle mới; vở/đầu vào vẫn Flash, bài viết vẫn đúng hai bài chữ của một em trong một lần gọi. Không thêm model kiểm toán, ảnh gửi Pro hoặc tự gọi trả phí lại.
 
 ## Phân biệt đúng loại vấn đề

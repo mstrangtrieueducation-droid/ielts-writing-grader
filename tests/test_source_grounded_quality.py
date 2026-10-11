@@ -205,3 +205,52 @@ def test_delivery_cannot_bypass_checked_payload(binding):
     with pytest.raises(ValueError,match='Delivery differs'):verify_saved_quality(state,b)
     state['bundle_work']['mode']='unknown-contract'
     with pytest.raises(ValueError,match='Unknown delivery'):verify_saved_quality(state,b)
+
+def total_spec(binding):
+    s=spec(binding)
+    s.ground_truth='Columns Biology/Medicine/Psychology. USA=69/54/58; UK=30/24/29; Australia=9/13/17; New Zealand=6/2/4; Canada=9/12/14.'
+    s.column_total_policy='additive_counts_across_disjoint_rows'
+    s.aggregation_scope_label='the five countries shown'
+    return s
+
+
+def test_separate_subject_totals_are_valid_despite_overlap_between_subjects(binding):
+    matrix=chart_matrix(total_spec(binding))
+    assert matrix['column_totals']=={'Biology':123,'Medicine':105,'Psychology':122}
+    value=item(binding)
+    quote='Across the five countries shown, Biology had the largest total number of ranked universities.'
+    revision(value,quote)
+    value.comparisons=[comparison(quote,scope='column_totals',scope_quote='Across the five countries shown',targets=['Biology'],relation='maximum')]
+    validate_comparisons(value,'Original.',matrix)
+    # A false alternative maximum must still fail arithmetic verification.
+    quote=quote.replace('Biology','Medicine')
+    revision(value,quote)
+    value.comparisons=[comparison(quote,scope='column_totals',scope_quote='Across the five countries shown',targets=['Medicine'],relation='maximum')]
+    with pytest.raises(ValueError,match='arithmetic'):validate_comparisons(value,'Original.',matrix)
+
+
+def test_totals_need_verified_additivity_and_visible_geographical_scope(binding):
+    s=total_spec(binding);value=item(binding)
+    quote='Across the five countries shown, Biology had the largest total number of ranked universities.'
+    revision(value,quote)
+    value.comparisons=[comparison(quote,scope='column_totals',scope_quote='Across the five countries shown',targets=['Biology'],relation='maximum')]
+    s.column_total_policy='not_verified'
+    with pytest.raises(ValueError,match='source-verified'):validate_comparisons(value,'Original.',chart_matrix(s))
+    # No implicit addition of percentages or overlapping groups.
+    assert 'column_totals' not in chart_guide(chart_matrix(spec(binding)))
+    s=total_spec(binding)
+    quote='Biology had the largest total number of ranked universities globally.'
+    revision(value,quote)
+    value.comparisons=[comparison(quote,scope='column_totals',scope_quote='globally',targets=['Biology'],relation='maximum')]
+    with pytest.raises(ValueError,match='explicit aggregation scope'):validate_comparisons(value,'Original.',chart_matrix(s))
+    s.aggregation_scope_label=''
+    with pytest.raises(ValueError,match='source scope'):chart_matrix(s)
+
+
+def test_v04_remains_an_audited_contract_after_prompt_upgrade(binding):
+    from src.graders.essay_bundle import AUDITED_MODES,LEGACY_MODES
+    assert 'hybrid-two-essays-v04-source-grounded-quality' in AUDITED_MODES
+    assert 'hybrid-two-essays-v04-source-grounded-quality' not in LEGACY_MODES
+    # Missing QA in an old v04 result must never bypass the release gate.
+    state={'bundle_work':{'mode':'hybrid-two-essays-v04-source-grounded-quality','status':'held'}}
+    with pytest.raises(ValueError,match='checkpoint'):verify_saved_quality(state,binding)

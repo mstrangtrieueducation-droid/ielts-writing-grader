@@ -22,6 +22,8 @@ class EssaySpec(Strict):
     paragraphs: int = 4
     body_min_sentences: int = 3
     body_max_sentences: int = 5
+    column_total_policy: Literal['not_verified', 'additive_counts_across_disjoint_rows'] = 'not_verified'
+    aggregation_scope_label: str = ''
 
 class Binding(Strict):
     task_code: str = Field(pattern=r'^[A-Za-z0-9][A-Za-z0-9.-]*$')
@@ -199,7 +201,7 @@ class ComparisonEvidence(Strict):
     location: str
     quote: str = Field(min_length=1)
     relation: Literal['minimum', 'maximum']
-    scope: Literal['table', 'row', 'column', 'row_ranges', 'column_ranges', 'row_dominance']
+    scope: Literal['table', 'row', 'column', 'row_ranges', 'column_ranges', 'row_dominance', 'column_totals']
     scope_key: str
     scope_quote: str
     targets: list[str] = Field(min_length=1)
