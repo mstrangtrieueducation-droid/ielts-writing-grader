@@ -47,18 +47,26 @@ class ClassBudget:
             raise ValueError('Stable student identity required for student cost ceiling')
         self.class_limit=self.data['limit_vnd']
         exception=job.get('cost_exception')
+        self.generation_limits=None
         if exception is not None:
             authority=binding.regrade_authorizations.get(self.student_id,'')
+            limits=exception.get('generation_limits',{'gemini-3.1-pro-preview':1})
+            if (not isinstance(limits,dict) or not limits
+                or any(model not in PRICES or type(count) is not int or count<1
+                       or count>(2 if model=='gemini-3.8-flash' else 1)
+                       for model,count in limits.items())):
+                raise ValueError('Cost exception has invalid per-model generation limits')
             if (exception.get('scope')!=self.scope or exception.get('job_id')!=self.job_id
                 or exception.get('student_id')!=self.student_id or not authority
                 or exception.get('authority')!=authority
                 or not exception.get('approved_at')
-                or exception.get('maximum_generation_calls')!=1
+                or exception.get('maximum_generation_calls')!=sum(limits.values())
                 or exception.get('new_trial_ceiling_vnd')!=self.trial_limit
                 or not isinstance(exception.get('class_ceiling_vnd'),int)
                 or exception['class_ceiling_vnd']<=CLASS_BUDGET_VND):
                 raise ValueError('Cost exception lacks exact teacher-authorized job scope')
             self.class_limit=exception['class_ceiling_vnd']
+            self.generation_limits=limits
 
     def ensure_capacity(self, amount):
         calls=list(self.data['calls'].values())
@@ -97,9 +105,11 @@ class ClassBudget:
     def reserve(self, key, model, tokens, max_output, service_tier='standard'):
         if datetime.now(timezone.utc).date().isoformat()>PRICE_VALID_THROUGH:
             raise ValueError('Budget price snapshot expired; generation held')
-        if self.class_limit>CLASS_BUDGET_VND and any(
-                c.get('job_id')==self.job_id for c in self.data['calls'].values()):
-            raise ValueError('Teacher cost exception permits only one generation call')
+        if self.generation_limits is not None:
+            used=sum(c.get('job_id')==self.job_id and c.get('model')==model
+                     for c in self.data['calls'].values())
+            if model not in self.generation_limits or used>=self.generation_limits[model]:
+                raise ValueError('Teacher cost exception permits only one generation plan; model call limit reached')
         # Allow room for token-counter overhead/schema differences; all output includes thought.
         bounded_input=math.ceil(tokens*1.2)+256
         amount=cost_vnd(model,bounded_input,max_output,service_tier=service_tier)

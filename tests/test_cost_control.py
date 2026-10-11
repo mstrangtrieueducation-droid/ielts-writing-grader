@@ -148,3 +148,19 @@ def test_teacher_cost_exception_is_one_call_and_never_raises_shared_limit(bindin
     mismatched={**job,'job_id':'different'}
     with pytest.raises(ValueError,match='exact teacher-authorized'):
         ClassBudget(store,binding,mismatched)
+
+def test_notebook_and_bundle_exception_cannot_authorize_second_pro_call(binding):
+    drive=FakeDrive();store=StateStore(drive,'state')
+    binding=binding.model_copy(update={'regrade_authorizations':{'S2':'Explicit notebook and two-essay pilot'}})
+    job={'job_id':'new-student','student':{'id':'S2'},'trial_cost_ceiling_vnd':7800}
+    job['cost_exception']={'scope':{'class_name':binding.class_name,'task_code':binding.task_code},
+        'job_id':'new-student','student_id':'S2','authority':binding.regrade_authorizations['S2'],
+        'approved_at':'2026-10-12T00:00:00+07:00','maximum_generation_calls':3,
+        'generation_limits':{'gemini-3.8-flash':2,'gemini-3.1-pro-preview':1},
+        'new_trial_ceiling_vnd':7800,'class_ceiling_vnd':27600}
+    for key,model in [('book','gemini-3.8-flash'),('independent-book','gemini-3.8-flash'),('bundle','gemini-3.1-pro-preview')]:
+        ClassBudget(store,binding,job).reserve(key,model,1000,2000)
+    for model in ('gemini-3.1-pro-preview','gemini-3.8-flash'):
+        with pytest.raises(ValueError,match='model call limit'):
+            ClassBudget(store,binding,job).reserve('extra-'+model,model,1000,2000)
+    assert ClassBudget(store,binding,job).data['limit_vnd']==14900
