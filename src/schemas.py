@@ -16,6 +16,7 @@ class EssaySpec(Strict):
     taught_theory: str = Field(min_length=20)
     assigned_outline: str
     ground_truth: str
+    data_kind: Literal['static','trend'] | None = None
     chart_file_ids: list[str] = Field(default_factory=list)
     minimum_words: int | None = None
     paragraphs: int = 4

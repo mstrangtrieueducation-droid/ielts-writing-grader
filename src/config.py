@@ -25,6 +25,7 @@ class Settings:
     retry_attempts: int = 6
     state_oauth: dict | None = None
     student_budget_vnd: int = 1000
+    essay_service_tier: str = 'standard'
 
     @classmethod
     def from_env(cls):
@@ -63,7 +64,12 @@ class Settings:
         if settings.notebook_model!='gemini-3.8-flash' or settings.essay_model not in ('gemini-3.8-flash','gemini-3.1-pro-preview'):
             raise ValueError('Notebook/OCR must use Flash; essays use Flash or an explicit text-only Pro bundle')
         from dataclasses import replace
-        settings=replace(settings,student_budget_vnd=int(os.getenv('GEMINI_STUDENT_BUDGET_VND','1000')))
+        settings=replace(settings,student_budget_vnd=int(os.getenv('GEMINI_STUDENT_BUDGET_VND','1000')),
+            essay_service_tier=os.getenv('GEMINI_ESSAY_SERVICE_TIER','standard'))
         if settings.student_budget_vnd<1:
             raise ValueError('Student budget must be positive')
+        if settings.essay_service_tier not in ('standard','flex'):
+            raise ValueError('Unverified service tier; generation held')
+        if settings.essay_service_tier=='flex' and settings.essay_model!='gemini-3.1-pro-preview':
+            raise ValueError('Flex configuration is scoped to the explicit Pro homework bundle')
         return settings

@@ -36,4 +36,14 @@ budget based on an assumed exchange rate, not a Google billing limit or an assur
 The full 8,192-token Pro output reserve alone exceeds 1,000 VND. Consequently this configuration
 holds fresh hybrid grading BEFORE notebook generation, with a budget error; it does not obtain
 an incomplete low-token response and call that a thorough 1,000 VND result. Generation remains OFF.
-No paid benchmark, Batch/Flex routing or automatic cost-limit increase is authorized by this code.
+No automatic cost-limit increase is authorized by this code.
+
+The latest requested economical trial can use Pro Flex with the SAME model, medium thinking and
+8,192-token output allowance. Flex price is half Standard; no Standard fallback or generation retry
+is allowed. This requires its own explicitly approved budget and selected-student authorization;
+the production 1,000 VND limit and generation-OFF flags remain unchanged. A tier-unconfirmed
+response preserves raw output/full reserve and freezes the cost scope instead of claiming savings.
+The new shared bundle version checks punctuation, rating complements, respectively group order
+and static-chart language. Explicit `data_kind=static` also blocks peak language in suggestions,
+the revision and collocation examples. None of these guards proves exhaustive semantic correctness:
+the real pilot still requires review against its actual originals and verified source data.

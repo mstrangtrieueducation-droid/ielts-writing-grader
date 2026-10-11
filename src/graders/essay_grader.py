@@ -118,6 +118,11 @@ def validate_essay(result, original, spec, assessment=False):
     if result.status == 'Đạt yêu cầu' and (result.word_count < minimum or result.paragraph_count != spec.paragraphs):
         raise ValueError('Passing verdict contradicts length/paragraph requirements')
     upgraded = '\n\n'.join(''.join(s.text for s in paragraph) for paragraph in result.upgraded_paragraphs)
+    if spec.task==1 and spec.data_kind=='static':
+        corrected_texts=[upgraded]+[c.suggested for c in result.corrections]
+        corrected_texts.extend(c.phrase+' '+c.usage_example for c in result.collocations)
+        if any(re.search(r'\bpeak(?:s|ed|ing)?\b',text,re.I) for text in corrected_texts):
+            raise ValueError('Static chart correction/revision contains temporal peak language')
     if word_count(upgraded) < minimum:
         raise ValueError('Upgraded essay below required word count')
     if isinstance(result,ThoroughFlashResult):

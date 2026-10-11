@@ -57,6 +57,7 @@ Repository variables:
 | `GEMINI_NOTEBOOK_MODEL` | `gemini-3.8-flash`, duy nhất cho ảnh/vở/từ vựng/OCR |
 | `GEMINI_ESSAY_MODEL` | `gemini-3.8-flash` cho luồng Flash; `gemini-3.1-pro-preview` cho hybrid hai bài homework, chỉ nhận chữ |
 | `GEMINI_STUDENT_BUDGET_VND` | Mặc định `1000`, tổng Flash + Pro mỗi học sinh/buổi trong hybrid, cộng dồn cả các job mới |
+| `GEMINI_ESSAY_SERVICE_TIER` | Mặc định `standard`; `flex` chỉ cho Pro bundle được cấu hình rõ, không fallback Standard |
 | `DASHBOARD_BASE_URL` | URL Pages gốc, HTTPS, không có fragment |
 | `GRADING_ENABLED` | Chỉ đặt `true` sau preflight và nghiệm thu một bài thử |
 | `GEMINI_GENERATION_ENABLED` | Mặc định tắt; phải bật riêng mới được gửi yêu cầu sinh trả phí |
@@ -66,6 +67,8 @@ Theo lựa chọn sau cùng của Cô ngày 10/10/2026, **Flash xử lý ảnh/v
 **Trạng thái hybrid: đã chuẩn bị mã, chưa chạy trả phí hoặc nghiệm thu.** Trần 1.000đ/em không đủ cho dự phòng 8.192 output token của Pro (riêng output tối đa khoảng 2.556đ ở tỷ giá giả định 26.000đ/USD). Luồng dừng ngay trước đọc vở nếu kế hoạch không đủ ngân sách. Hai cờ generation/grading vẫn OFF. Không coi lượt dừng vì ngân sách là đã chấm xong; không tăng trần, ép cắt bản chữa hoặc tự đổi sang Batch/Flex để vượt giới hạn.
 
 Ví dụ dự trù, **không phải hóa đơn hoặc đo thực tế**: một lượt vở/outline Flash 6.000 input + 1.000 output khoảng 215đ; một lượt Pro gom hai bài 3.000 input + 4.000–6.000 output khoảng 1.404–2.028đ. Tổng khoảng **1.619–2.243đ/em**. Output gồm cả suy luận và JSON, lượng lỗi và độ dài bản chữa làm thay đổi chi phí. Giữ nguyên trần lớp/buổi 14.900đ đang có; trần này cũng có thể giữ lại các học sinh còn chờ.
+
+**Lượt thử tiết kiệm đang chuẩn bị:** Pro Flex dùng cùng model với giá bằng 50% Standard, chờ tối đa 15 phút và chỉ gửi một yêu cầu sinh, không retry/fallback. Notebook đã kiểm tra chỉ tái dùng sau xác minh lại nguồn/receipt/checksum. Trần từng lượt thử phải được Cô chấp thuận riêng nếu vượt 1.000đ; workflow `authorized_hybrid_trial` chỉ bật sinh cho đúng pilot đó, không đổi cờ lịch tự động. Ngân sách cộng dồn của em vẫn bao gồm các lượt trước, không xóa lịch sử phí; `trial_cost_ceiling_vnd` giới hạn riêng khoản mới. Chi phí kiểm tra vở mới của học sinh khác không được suy ra là 0 từ pilot tái dùng vở này.
 
 Service account cần Sheets API + Drive API và quyền Editor trên guideline/tracker/state/incoming/processed; quyền đọc các Form response, bài học, chart và tệp học sinh. Nếu tạo tệp state bằng service account, dùng **Shared Drive** hỗ trợ service account và cấp đúng quyền. Service account thường không có storage quota để tạo tệp mới trong My Drive: chia sẻ một thư mục My Drive đơn thuần không bảo đảm ghi state được. Không chuyển tệp scan gốc ra khỏi vị trí đang cần cho lớp; incoming nên là bản scan dành riêng cho pipeline.
 

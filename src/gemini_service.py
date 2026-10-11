@@ -36,6 +36,7 @@ class GeminiService:
         self.budget = None
         self.essay_model=settings.essay_model
         self.student_limit=settings.student_budget_vnd
+        self.essay_service_tier=settings.essay_service_tier
 
     def bind_budget(self, store, binding, state):
         self.budget=ClassBudget(store,binding,state,
@@ -48,7 +49,8 @@ class GeminiService:
             raise ValueError('Hybrid Pro mode requires exactly two homework essays for one student')
         # Even an optimistic output-only reserve must fit BEFORE spending on notebook scans.
         # Do not truncate detailed feedback/omit errors to pretend an unaffordable plan fits.
-        self.budget.ensure_capacity(cost_vnd(self.essay_model,0,8192))
+        self.budget.ensure_capacity(cost_vnd(self.essay_model,0,8192,
+            service_tier=getattr(self,'essay_service_tier','standard')))
 
     def preflight(self, models):
         for model in set(models):
@@ -75,12 +77,20 @@ class GeminiService:
             parts.extend([types.Part.from_text(text=f'EVIDENCE FILE_ID={identity}'),
                 types.Part.from_bytes(data=data, mime_type=mime)])
         thinking='medium' if is_essay else 'low'
+        service_tier=getattr(self,'essay_service_tier','standard') if pro_bundle else 'standard'
+        if service_tier not in ('standard','flex'):
+            raise ValueError('Unverified service tier; generation held')
         config=types.GenerateContentConfig(system_instruction=SYSTEM, temperature=0.1,
             max_output_tokens=8192, response_mime_type='application/json',
             response_json_schema=schema.model_json_schema(),
             thinking_config=types.ThinkingConfig(thinking_level=thinking))
+        if service_tier=='flex':
+            config.service_tier='flex'
+            config.http_options=types.HttpOptions(timeout=900000,
+                retry_options=types.HttpRetryOptions(attempts=1))
         fingerprint=hashlib.sha256(json.dumps({'model':model,'prompt':prompt,'system':SYSTEM,
             'schema':schema.model_json_schema(),'output_limit':8192,'thinking':thinking,
+            **({'service_tier':'flex'} if service_tier=='flex' else {}),
             'files':[(fid,hashlib.sha256(data).hexdigest(),mime) for fid,data,mime in attachments]},
             sort_keys=True).encode()).hexdigest()
         call_key=self.budget.key(fingerprint)
@@ -95,18 +105,27 @@ class GeminiService:
             types.Part.from_text(text=json.dumps(schema.model_json_schema(),ensure_ascii=False))])
         if counted.total_tokens is None:
             raise ValueError('Could not count input tokens; generation held')
-        self.budget.reserve(call_key,model,counted.total_tokens,config.max_output_tokens)
+        self.budget.reserve(call_key,model,counted.total_tokens,config.max_output_tokens,service_tier)
         self.limiter.wait()
         # Exactly one network generation attempt. Timeouts/429/5xx remain reserved, not repaid.
         result=self.client.models.generate_content(model=model,contents=parts,config=config)
         usage=result.usage_metadata.model_dump(mode='json') if result.usage_metadata else {}
-        self.budget.received(call_key,result.text,usage)
+        response_tier=getattr(result,'service_tier',None)
+        http_response=getattr(result,'sdk_http_response',None)
+        if not response_tier and http_response and http_response.headers:
+            headers={k.lower():v for k,v in http_response.headers.items()}
+            response_tier=headers.get('x-gemini-service-tier')
+        if response_tier is not None:
+            response_tier=str(response_tier).strip().lower()
+        self.budget.received(call_key,result.text,usage,response_tier)
         if self.audit:
             self.audit({'job_id':self.job_id,'model':model,'created_at':datetime.now(timezone.utc).isoformat(),
                 'trusted_system':SYSTEM,'prompt':prompt,'prompt_sha256':hashlib.sha256(prompt.encode()).hexdigest(),
                 'sources':[{'file_id':fid,'sha256':hashlib.sha256(data).hexdigest(),'mime':mime} for fid,data,mime in attachments],
                 'response_text':result.text,'schema':schema.__name__,
                 'usage_metadata':usage,'cost_call_key':call_key})
+        if self.budget.data['calls'][call_key].get('tier_unverified'):
+            raise ValueError('Flex response tier unverified; preserve raw result and hold publication/cost claim')
         if not result.text:
             raise ValueError('Model returned no usable structured response')
         return schema.model_validate_json(result.text)
