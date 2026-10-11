@@ -45,6 +45,20 @@ class ClassBudget:
         self.jobs=store.jobs
         if student_limit is not None and not self.student_id:
             raise ValueError('Stable student identity required for student cost ceiling')
+        self.class_limit=self.data['limit_vnd']
+        exception=job.get('cost_exception')
+        if exception is not None:
+            authority=binding.regrade_authorizations.get(self.student_id,'')
+            if (exception.get('scope')!=self.scope or exception.get('job_id')!=self.job_id
+                or exception.get('student_id')!=self.student_id or not authority
+                or exception.get('authority')!=authority
+                or not exception.get('approved_at')
+                or exception.get('maximum_generation_calls')!=1
+                or exception.get('new_trial_ceiling_vnd')!=self.trial_limit
+                or not isinstance(exception.get('class_ceiling_vnd'),int)
+                or exception['class_ceiling_vnd']<=CLASS_BUDGET_VND):
+                raise ValueError('Cost exception lacks exact teacher-authorized job scope')
+            self.class_limit=exception['class_ceiling_vnd']
 
     def ensure_capacity(self, amount):
         calls=list(self.data['calls'].values())
@@ -63,8 +77,8 @@ class ClassBudget:
             trial_spent=sum(value(c) for c in calls if c.get('job_id')==self.job_id)
             if trial_spent+amount>self.trial_limit:
                 raise ValueError('Explicit trial cost ceiling would be exceeded; generation held')
-        if sum(value(c) for c in calls)+amount>self.data['limit_vnd']:
-            raise ValueError('Class/task budget would exceed 14,900 VND; generation held')
+        if sum(value(c) for c in calls)+amount>self.class_limit:
+            raise ValueError(f'Class/task budget would exceed {self.class_limit:,} VND; generation held')
 
     def save(self):
         self.drive.write_json(self.folder,self.filename,self.data)
@@ -83,6 +97,9 @@ class ClassBudget:
     def reserve(self, key, model, tokens, max_output, service_tier='standard'):
         if datetime.now(timezone.utc).date().isoformat()>PRICE_VALID_THROUGH:
             raise ValueError('Budget price snapshot expired; generation held')
+        if self.class_limit>CLASS_BUDGET_VND and any(
+                c.get('job_id')==self.job_id for c in self.data['calls'].values()):
+            raise ValueError('Teacher cost exception permits only one generation call')
         # Allow room for token-counter overhead/schema differences; all output includes thought.
         bounded_input=math.ceil(tokens*1.2)+256
         amount=cost_vnd(model,bounded_input,max_output,service_tier=service_tier)

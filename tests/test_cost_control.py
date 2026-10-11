@@ -126,3 +126,25 @@ def test_invalid_json_cached_without_paid_repair(binding,monkeypatch):
         with pytest.raises(ValueError):ai.structured('gemini-3.8-flash','prompt',EssayResult)
         ai.budget=ClassBudget(store,binding,{'job_id':'test'})
     assert len(calls)==1
+
+def test_teacher_cost_exception_is_one_call_and_never_raises_shared_limit(binding):
+    drive=FakeDrive();store=StateStore(drive,'state')
+    original=ClassBudget(store,binding,{'job_id':'history'})
+    original.data['calls']['old']={'job_id':'history','reserved_vnd':14500,'status':'reserved'}
+    original.save()
+    binding=binding.model_copy(update={'regrade_authorizations':{'S1':'Explicit one-call teacher approval'}})
+    job={'job_id':'approved','student':{'id':'S1'},'trial_cost_ceiling_vnd':5700}
+    job['cost_exception']={'scope':{'class_name':binding.class_name,'task_code':binding.task_code},
+        'job_id':'approved','student_id':'S1','authority':binding.regrade_authorizations['S1'],
+        'approved_at':'2026-10-12T00:00:00+07:00','maximum_generation_calls':1,
+        'new_trial_ceiling_vnd':5700,'class_ceiling_vnd':16100}
+    approved=ClassBudget(store,binding,job)
+    approved.reserve('new','gemini-3.1-pro-preview',1000,2000)
+    assert approved.data['limit_vnd']==14900
+    with pytest.raises(ValueError,match='only one generation'):
+        ClassBudget(store,binding,job).reserve('another','gemini-3.1-pro-preview',1000,2000)
+    with pytest.raises(ValueError,match='14,900'):
+        ClassBudget(store,binding,{'job_id':'other'}).ensure_capacity(1)
+    mismatched={**job,'job_id':'different'}
+    with pytest.raises(ValueError,match='exact teacher-authorized'):
+        ClassBudget(store,binding,mismatched)
