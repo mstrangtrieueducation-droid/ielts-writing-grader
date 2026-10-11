@@ -192,6 +192,38 @@ class FlashEssayBundle(ProEssayBundle):
     # Separate schema identity keeps historical Pro attempts/model routing intact.
     pass
 
+class AuditedCorrection(Correction):
+    category: Literal['grammar', 'data', 'clarity', 'punctuation', 'register', 'optional']
+
+class ComparisonEvidence(Strict):
+    location: str
+    quote: str = Field(min_length=1)
+    relation: Literal['minimum', 'maximum']
+    scope: Literal['table', 'row', 'column', 'row_ranges', 'column_ranges', 'row_dominance']
+    scope_key: str
+    scope_quote: str
+    targets: list[str] = Field(min_length=1)
+    valid: bool
+
+class NumericEvidence(Strict):
+    check_index: int = Field(ge=1)
+    kind: Literal['cells', 'context']
+    cells: list[str]
+    operator: Literal['eq', 'gt', 'ge', 'lt', 'le']
+    value: float
+
+class AuditedBundledEssayFeedback(BundledEssayFeedback):
+    corrections: list[AuditedCorrection]
+    comparisons: list[ComparisonEvidence]
+    numeric_evidence: list[NumericEvidence]
+
+class AuditedProEssayBundle(ProEssayBundle):
+    # New attempts only. Legacy schemas/checkpoints are immutable and remain readable.
+    essays: list[AuditedBundledEssayFeedback] = Field(min_length=2, max_length=2)
+
+class AuditedFlashEssayBundle(FlashEssayBundle):
+    essays: list[AuditedBundledEssayFeedback] = Field(min_length=2, max_length=2)
+
 class QualityReview(Strict):
     approved: bool
     issues: list[str]

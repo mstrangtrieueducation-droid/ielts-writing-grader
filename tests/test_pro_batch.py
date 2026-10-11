@@ -173,6 +173,8 @@ def test_no_batch_identity_after_reservation_never_resubmits(binding,monkeypatch
 def test_bundle_checkpoints_queue_and_resumes_existing_batch(binding,monkeypatch):
     ai,calls,saved,_,_=setup(binding,monkeypatch)
     specs,texts,bundle=originals(binding)
+    from test_hybrid_bundle import audited
+    bundle=audited(bundle)
     ai.structured=lambda model,prompt,schema,files:request(ai,prompt,schema)
     settings=SimpleNamespace(essay_model=MODEL,essay_service_tier='batch')
     work=[]
@@ -189,6 +191,8 @@ def test_collect_does_not_read_sources_or_publish(binding,settings,monkeypatch):
     from conftest import notebook
     ai,calls,saved,store,_=setup(binding,monkeypatch)
     specs,texts,bundle=originals(binding)
+    from test_hybrid_bundle import audited
+    bundle=audited(bundle)
     binding=binding.model_copy(update={'essays':specs})
     state=store.begin(binding,{'id':'S1','name':'Test'},
         {'received_at':'2026-10-09T23:00:00+07:00','notebook_ids':['book'],'essay_texts':texts})

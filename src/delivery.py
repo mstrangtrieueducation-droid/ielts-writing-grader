@@ -26,6 +26,8 @@ def deliver(state, binding, student, dashboard, sheets, store, spreadsheet, driv
     check_suppression(payload)
     if state['phase']=='complete':
         return
+    from .graders.essay_bundle import verify_saved_quality
+    verify_saved_quality(state,binding)
     # Publishing/checking is repeated on delivery retries, but cached model results are reused.
     state['dashboard_evidence']=dashboard.publish(payload)
     state['phase']='dashboard_verified'

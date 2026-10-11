@@ -23,6 +23,11 @@ and a corrected sentence. Do not flag OCR uncertainty as a student error.
 Do not invent mandatory articles: quantified phrases such as 'three courses' are grammatical;
 adding 'the' can be a stylistic choice, not a missing-article error. Separate optional refinements
 from actual errors. Do not falsely claim an ambiguous or imprecise expression is ungrammatical.
+If a coordination/reference has a reasonable correct reading, explain its ambiguity rather than
+asserting a definite wrong-data reading. Judge each numerical subclaim independently: a wrong
+nearby value does not make another correctly identified value ambiguous. Explicitly annotate
+capitalization and punctuation errors that your revision repairs. Validate the comparison scope
+in your own revision and collocation examples as carefully as in the student's original.
 Report actual application of taught theory with examples. Upgrade to a coherent four-paragraph
 essay preserving the assigned position/ideas, with typed spans: yellow stance/attribution,
 blue functional connectors, green hedging; plain for other text. Extract4–6 useful collocations.

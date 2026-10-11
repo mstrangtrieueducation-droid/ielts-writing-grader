@@ -150,6 +150,8 @@ Nếu lỗi: đọc `job-<hash>.json` trong state folder để biết phase/last
 
 ## Luồng tiết kiệm theo yêu cầu ngày 10/10/2026
 
+Sửa chất lượng ngày 11/10/2026: lượt bundle mới dùng prompt v04 và kiểm tra số liệu/phạm vi bằng chương trình trước giao kết quả. Xem [quy tắc kiểm tra chất lượng](docs/QUALITY-CONTRACT.md). Lượt cũ giữ schema và bằng chứng riêng, không tự chấm lại. Thay đổi này không bật generation, tăng trần tiền hoặc thay nghiệm thu trên bài thật bằng test giả lập.
+
 - Luồng Flash ban đầu dưới đây được giữ để so sánh chi phí; cấu hình hybrid mới ở trên thay thế lựa chọn model cho các lượt mới. Cả hai chỉ gửi `EssaySpec` bằng chữ (đề, lý thuyết đã học, dàn ý và dữ liệu biểu đồ đã xác minh), bài gõ chữ và rubric vào model chữa bài. Không đính kèm vở, PDF bài học hoặc ảnh biểu đồ vào lượt chữa chữ. Task 1 thiếu ground truth dạng chữ thì giữ lại, không đoán.
 - Vở vẫn đọc đủ trang, không giảm trang để giảm tiền. Flash có thể có lượt thứ hai cho kết luận thiếu/đánh máy; dự trù cơ sở dưới đây tính một lượt vở, lượt thứ hai tăng tiền.
 - `cost_control.py` dự phòng chi phí trước mỗi yêu cầu, dùng token counter cho đầu vào cộng 20% + 256 token, output cap 8192 gồm suy luận. Sổ chi phí bền vững chung cho đúng lớp/buổi, không reset khi đổi học sinh, workflow hoặc authorization. Tiền chưa rõ tiếp tục chiếm dự phòng. Phản hồi nhận được được tái dùng mà không gọi lại.

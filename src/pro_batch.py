@@ -9,7 +9,7 @@ import os
 from datetime import datetime, timezone
 from google.genai import types
 from .parsers import digest
-from .schemas import ProEssayBundle
+from .schemas import ProEssayBundle,AuditedProEssayBundle
 
 MODEL='gemini-3.1-pro-preview'
 TERMINAL={'JOB_STATE_SUCCEEDED','JOB_STATE_FAILED','JOB_STATE_CANCELLED','JOB_STATE_EXPIRED'}
@@ -27,7 +27,7 @@ def exact_model(model):
     return (model or '').removeprefix('models/')==MODEL
 
 def request(ai, prompt, schema):
-    if schema is not ProEssayBundle:
+    if schema not in (ProEssayBundle,AuditedProEssayBundle):
         raise ValueError('Pro Batch only accepts the approved two-essay schema')
     config=types.GenerateContentConfig(system_instruction=ai.trusted_system,
         temperature=0.1,max_output_tokens=8192,response_mime_type='application/json',

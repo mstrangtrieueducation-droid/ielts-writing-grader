@@ -1,7 +1,7 @@
 from types import SimpleNamespace
 import json
 import pytest
-from src.schemas import ProEssayBundle,FlashEssayBundle
+from src.schemas import ProEssayBundle,FlashEssayBundle,AuditedProEssayBundle
 from src.parsers import digest
 from src.graders.essay_grader import language_units
 from src.graders.essay_bundle import grade_bundle,prepare_bundle,restore_bundle
@@ -27,18 +27,25 @@ def originals(binding):
         items.append(data)
     return specs,texts,ProEssayBundle(essays=items)
 
+def audited(response):
+    data=response.model_dump()
+    for item in data['essays']:
+        item.update(comparisons=[],numeric_evidence=[])
+        for correction in item['corrections']:correction['category']='grammar'
+    return AuditedProEssayBundle.model_validate(data)
+
 def test_two_originals_one_request_durable_replay(binding):
     specs,texts,response=originals(binding)
     calls=[];work=[]
     def structured(model,prompt,schema,attachments):
         calls.append((model,prompt,schema,attachments))
-        return response
+        return audited(response)
     ai=SimpleNamespace(structured=structured)
     settings=SimpleNamespace(essay_model='gemini-3.1-pro-preview')
     first=grade_bundle(ai,settings,specs,texts,work.append)
     second=grade_bundle(ai,settings,specs,texts,work.append,work[-1])
     assert len(calls)==1 and calls[0][3]==()
-    assert calls[0][2] is ProEssayBundle
+    assert calls[0][2] is AuditedProEssayBundle
     sent=json.loads(calls[0][1].split('\n')[-1])
     assert [item['original'] for item in sent]==[texts['1'],texts['2']]
     assert [x.original for x in first]==[texts['1'],texts['2']]
@@ -48,7 +55,7 @@ def test_two_originals_one_request_durable_replay(binding):
 
 def test_flash_two_essays_explicit_one_call_and_replay(binding,monkeypatch):
     specs,texts,response=originals(binding)
-    ai,calls,*_=service(binding,monkeypatch,response.model_dump_json())
+    ai,calls,*_=service(binding,monkeypatch,audited(response).model_dump_json())
     ai.essay_model='gemini-3.8-flash';ai.essay_bundle=True
     settings=SimpleNamespace(essay_model=ai.essay_model,essay_bundle=True)
     checkpoints=[]
