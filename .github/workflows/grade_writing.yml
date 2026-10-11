@@ -29,6 +29,11 @@ on:
         description: 'Explicitly approved immediate one-student Pro Standard pilot'
         type: boolean
         default: false
+      pro_output_limit:
+        description: 'Output plus thinking limit from the explicitly approved Standard pilot plan'
+        type: choice
+        options: ['8192','16384']
+        default: '8192'
       hybrid_student_budget_vnd:
         description: 'Approved cumulative student ceiling for this pilot, including prior paid trials'
         type: string
@@ -62,6 +67,7 @@ jobs:
       # The earlier Flash-only trial authorization must never authorize a Pro call.
       GEMINI_ESSAY_MODEL: ${{ inputs.mode == 'pilot' && (inputs.authorized_flash_trial || inputs.authorized_flash_bundle_trial) && 'gemini-3.8-flash' || (inputs.mode == 'collect-pro-batch' || inputs.mode == 'pilot' && (inputs.authorized_hybrid_trial || inputs.authorized_pro_batch_trial || inputs.authorized_pro_standard_trial)) && 'gemini-3.1-pro-preview' || vars.GEMINI_ESSAY_MODEL }}
       GEMINI_ESSAY_BUNDLE: ${{ inputs.mode == 'pilot' && inputs.authorized_flash_bundle_trial && 'true' || vars.GEMINI_ESSAY_BUNDLE || 'false' }}
+      GEMINI_PRO_MAX_OUTPUT_TOKENS: ${{ inputs.mode == 'pilot' && inputs.authorized_pro_standard_trial && inputs.pro_output_limit || '8192' }}
       GEMINI_ESSAY_SERVICE_TIER: ${{ inputs.mode == 'pilot' && inputs.authorized_pro_standard_trial && 'standard' || (inputs.mode == 'collect-pro-batch' || inputs.mode == 'pilot' && inputs.authorized_pro_batch_trial) && 'batch' || inputs.mode == 'pilot' && inputs.authorized_flash_bundle_trial && 'standard' || inputs.mode == 'pilot' && inputs.authorized_hybrid_trial && !inputs.authorized_flash_trial && 'flex' || vars.GEMINI_ESSAY_SERVICE_TIER || 'standard' }}
       GEMINI_STUDENT_BUDGET_VND: ${{ (inputs.mode == 'collect-pro-batch' || inputs.mode == 'pilot' && (inputs.authorized_hybrid_trial || inputs.authorized_flash_bundle_trial || inputs.authorized_pro_batch_trial || inputs.authorized_pro_standard_trial)) && !inputs.authorized_flash_trial && inputs.hybrid_student_budget_vnd || vars.GEMINI_STUDENT_BUDGET_VND || '1000' }}
       DASHBOARD_BASE_URL: ${{ vars.DASHBOARD_BASE_URL }}

@@ -51,3 +51,20 @@ Only one serialized workflow mutates the private ledger. Do not submit through
 local Python or bypass GitHub Actions checks. Collection does not automatically
 authorize a new Batch. No recurring collection or grading is activated by this
 code change; the production switches remain independently controlled.
+
+## Separately approved immediate Standard pilot
+
+The teacher can instead approve `authorized_pro_standard_trial=true` for an
+immediate Standard request. This never submits Batch and does not raise global
+budgets or enable scheduled generation. Frozen `generation_plan` is required
+before selecting `pro_output_limit=16384`; it must record Standard Pro, medium
+thinking and that output limit. The new pilot must have its own cost ceiling.
+The limit includes BOTH internal thinking and the final structured feedback;
+an 8192-token limit can exhaust its allowance on thinking before finishing two
+essays. Check the conservative full reserve before any notebook generation.
+
+Preserve a truncated response and its usage before validation. A non-STOP finish
+is held even if JSON happens to be parseable. A paid replacement requires a new
+teacher-approved attempt, never a loop or a repair of the student's feedback.
+Increasing output room preserves the same rubric and thinking level; it does
+not certify quality. Independent review and exact delivery checks still apply.

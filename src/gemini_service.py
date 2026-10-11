@@ -39,8 +39,15 @@ class GeminiService:
         self.essay_service_tier=settings.essay_service_tier
         self.essay_bundle=getattr(settings,'essay_bundle',False)
         self.trusted_system=SYSTEM
+        self.pro_max_output_tokens=getattr(settings,'pro_max_output_tokens',8192)
 
     def bind_budget(self, store, binding, state):
+        output_limit=getattr(self,'pro_max_output_tokens',8192)
+        if self.essay_model=='gemini-3.1-pro-preview' and output_limit!=8192:
+            expected={'model':self.essay_model,'service_tier':self.essay_service_tier,
+                      'max_output_tokens':output_limit,'thinking_level':'medium'}
+            if state.get('generation_plan')!=expected or self.essay_service_tier!='standard':
+                raise ValueError('Larger Pro response requires an explicitly frozen Standard plan')
         self.budget=ClassBudget(store,binding,state,
             self.student_limit if self.essay_model=='gemini-3.1-pro-preview' or getattr(self,'essay_bundle',False) else None)
 
@@ -51,7 +58,8 @@ class GeminiService:
             raise ValueError('Hybrid Pro mode requires exactly two homework essays for one student')
         # Even an optimistic output-only reserve must fit BEFORE spending on notebook scans.
         # Do not truncate detailed feedback/omit errors to pretend an unaffordable plan fits.
-        self.budget.ensure_capacity(cost_vnd(self.essay_model,0,8192,
+        self.budget.ensure_capacity(cost_vnd(self.essay_model,0,
+            getattr(self,'pro_max_output_tokens',8192) if self.essay_model=='gemini-3.1-pro-preview' else 8192,
             service_tier=getattr(self,'essay_service_tier','standard')))
 
     def preflight(self, models):
@@ -88,22 +96,30 @@ class GeminiService:
         service_tier=getattr(self,'essay_service_tier','standard') if pro_bundle else 'standard'
         if service_tier not in ('standard','flex'):
             raise ValueError('Unverified service tier; generation held')
+        output_limit=getattr(self,'pro_max_output_tokens',8192) if pro_bundle else 8192
+        if output_limit not in (8192,16384) or output_limit!=8192 and service_tier!='standard':
+            raise ValueError('Larger output plan is restricted to approved Standard Pro')
         config=types.GenerateContentConfig(system_instruction=SYSTEM, temperature=0.1,
-            max_output_tokens=8192, response_mime_type='application/json',
+            max_output_tokens=output_limit, response_mime_type='application/json',
             response_json_schema=schema.model_json_schema(),
             thinking_config=types.ThinkingConfig(thinking_level=thinking))
         if service_tier=='flex':
             config.service_tier='flex'
             config.http_options=types.HttpOptions(timeout=900000,
                 retry_options=types.HttpRetryOptions(attempts=1))
+        elif pro_bundle and output_limit>8192:
+            config.http_options=types.HttpOptions(timeout=900000,
+                retry_options=types.HttpRetryOptions(attempts=1))
         fingerprint=hashlib.sha256(json.dumps({'model':model,'prompt':prompt,'system':SYSTEM,
-            'schema':schema.model_json_schema(),'output_limit':8192,'thinking':thinking,
+            'schema':schema.model_json_schema(),'output_limit':output_limit,'thinking':thinking,
             **({'service_tier':'flex'} if service_tier=='flex' else {}),
             'files':[(fid,hashlib.sha256(data).hexdigest(),mime) for fid,data,mime in attachments]},
             sort_keys=True).encode()).hexdigest()
         call_key=self.budget.key(fingerprint)
         saved=self.budget.existing(call_key)
         if saved:
+            if saved.get('response_incomplete'):
+                raise ValueError('Saved provider response was truncated; no automatic paid retry')
             # Replay even invalid JSON: validation holds it without a second payment.
             return schema.model_validate_json(saved['response_text'] or '')
         # Developer API countTokens does not accept system_instruction/generation_config.
@@ -144,12 +160,20 @@ class GeminiService:
         if response_tier is not None:
             response_tier=str(response_tier).strip().lower()
         self.budget.received(call_key,result.text,usage,response_tier)
+        finish_reasons=[getattr(c.finish_reason,'name',str(c.finish_reason))
+            for c in (getattr(result,'candidates',None) or [])]
+        call=self.budget.data['calls'][call_key]
+        call['finish_reasons']=finish_reasons
+        call['response_incomplete']=bool(finish_reasons and finish_reasons!=['STOP'])
+        self.budget.save()
         if self.audit:
             self.audit({'job_id':self.job_id,'model':model,'created_at':datetime.now(timezone.utc).isoformat(),
                 'trusted_system':SYSTEM,'prompt':prompt,'prompt_sha256':hashlib.sha256(prompt.encode()).hexdigest(),
                 'sources':[{'file_id':fid,'sha256':hashlib.sha256(data).hexdigest(),'mime':mime} for fid,data,mime in attachments],
                 'response_text':result.text,'schema':schema.__name__,
                 'usage_metadata':usage,'cost_call_key':call_key})
+        if call['response_incomplete']:
+            raise ValueError('Provider response did not finish normally; raw result and usage preserved, no paid retry')
         if self.budget.data['calls'][call_key].get('tier_unverified'):
             raise ValueError('Flex response tier unverified; preserve raw result and hold publication/cost claim')
         if not result.text:

@@ -27,6 +27,7 @@ class Settings:
     student_budget_vnd: int = 1000
     essay_service_tier: str = 'standard'
     essay_bundle: bool = False
+    pro_max_output_tokens: int = 8192
 
     @classmethod
     def from_env(cls):
@@ -67,7 +68,10 @@ class Settings:
         from dataclasses import replace
         settings=replace(settings,student_budget_vnd=int(os.getenv('GEMINI_STUDENT_BUDGET_VND','1000')),
             essay_service_tier=os.getenv('GEMINI_ESSAY_SERVICE_TIER','standard'),
-            essay_bundle=os.getenv('GEMINI_ESSAY_BUNDLE','false')=='true')
+            essay_bundle=os.getenv('GEMINI_ESSAY_BUNDLE','false')=='true',
+            pro_max_output_tokens=int(os.getenv('GEMINI_PRO_MAX_OUTPUT_TOKENS','8192')))
+        if settings.pro_max_output_tokens not in (8192,16384):
+            raise ValueError('Unverified Pro output plan; generation held')
         if settings.student_budget_vnd<1:
             raise ValueError('Student budget must be positive')
         if settings.essay_service_tier not in ('standard','flex','batch'):
