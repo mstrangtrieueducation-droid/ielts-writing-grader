@@ -1,0 +1,52 @@
+{
+  "id": "B14-HOMEWORK-NOTREND",
+  "version": "v07",
+  "lesson": 14,
+  "quality_status": "prepared_requires_live_trial",
+  "essay_fingerprint": "c23b969d45e0332425940fd919d03911624bbd9be9f02b9d033f6d94afa2aa25",
+  "notebook_fingerprint": "cf6b8f290461b767c110d02a80d51476b15b64f1eb9f0a9a4391ea8e0bdd7014",
+  "assigned_source_sha256": [
+    "4edb01f61f5e1668639602160238780a610e38c641dbaae391d134302b669046"
+  ],
+  "prompt_files": [
+    {
+      "path": "src/prompts/hybrid-v06.txt",
+      "sha256": "7b2b222237977ceef3c0178aebcf995f9cf34c4f55b59a17afb4a639d8a88055",
+      "normalization": "lf"
+    },
+    {
+      "path": "src/prompts/flash-language-v03.txt",
+      "sha256": "aee98aaaf430c68211983e0451d683fb90847fc447886c0af3fd67d2c3752b31",
+      "normalization": "lf"
+    },
+    {
+      "path": "src/graders/essay_bundle.py",
+      "sha256": "75be2112635e127a1f27d99ae5ac5f369a4aded1ca4d9c3f6f0c9d5d39d20284",
+      "normalization": "lf"
+    },
+    {
+      "path": "src/graders/quality_contract.py",
+      "sha256": "408cd872a5acf29998d635f6c94fa88c1b0323c9bd1e0a67e58a27f87ac52619",
+      "normalization": "lf"
+    },
+    {
+      "path": "src/graders/essay_grader.py",
+      "sha256": "03bc0974f2605fc19bf26672825aa04d3623049f43a80c3824f3ed49d3022aec",
+      "normalization": "lf"
+    },
+    {
+      "path": "src/prompts/teaching-fairness-v01.txt",
+      "sha256": "783cbf5f676fd674d090fb6b89180e54d352cf40568c013b8f4103049b90beab",
+      "normalization": "lf"
+    },
+    {
+      "path": "src/graders/teaching_fairness.py",
+      "sha256": "feab948c9061eec7fbe0ec2fbfa7868f39d457e31c3cda44ef71fae08ab3577a",
+      "normalization": "lf"
+    }
+  ],
+  "essay_model_role": "Pro text-only two-essay bundle; no paid review loop",
+  "notebook_model_role": "Flash verified full assigned notebook; reuse only with matching evidence",
+  "authorization": "No class, student, receipt, activation or spending permission is granted by this package.",
+  "quality_note": "New teaching/reference/register safeguards tested locally only. No new paid call or live acceptance. All old results retain frozen contracts."
+}

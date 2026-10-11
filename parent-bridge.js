@@ -83,7 +83,8 @@ const ieltsHybridReviews_ = (() => {
     });
     template.content.querySelectorAll('p > strong').forEach(node=>{if(node.textContent.trim().replace(/:$/,'')==='Nhận xét bài tập về nhà')node.textContent='Tình trạng nộp bài:';});
     const key=load(ref);
-    return template.innerHTML+'<section class="hy-result" data-hybrid-result="'+esc(key)+'" aria-label="Nhận xét bài tập về nhà"><p role="status">Đang mở bài chữa của em…</p></section>';
+    const saved=cache.get(key),ready=saved&&saved.identity===identity()&&saved.payload;
+    return template.innerHTML+'<section class="hy-result" data-hybrid-result="'+esc(key)+'"'+(ready?' data-hybrid-state="ready"':'')+' aria-label="Nhận xét bài tập về nhà">'+(ready?resultHtml(saved.payload):'<p role="status">Đang mở bài chữa của em…</p>')+'</section>';
   }
   window.addEventListener('hashchange',clear);window.addEventListener('pagehide',clear);
   return {fragment,clear};

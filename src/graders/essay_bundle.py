@@ -10,9 +10,10 @@ from ..parsers import word_count,essay_paragraphs,digest
 from ..pro_batch import BatchPending
 from .essay_grader import RUBRIC,LANGUAGE_AUDIT,NUMERICAL_AUDIT,language_units,validate_essay,source_quote
 from .quality_contract import QUALITY_CONTRACT,CONTRACT_VERSION,chart_matrix,chart_guide,validate_quality_contract,strict_boundary_facts
+from .teaching_fairness import POLICY as TEACHING_FAIRNESS, validate_teaching_fairness
 
-PROMPT_VERSION='hybrid-two-essays-v06-clause-context-and-boundaries'
-AUDITED_MODES={'hybrid-two-essays-v04-source-grounded-quality','hybrid-two-essays-v05-fair-comparison-scope',PROMPT_VERSION}
+PROMPT_VERSION='hybrid-two-essays-v07-teaching-reference-register'
+AUDITED_MODES={'hybrid-two-essays-v04-source-grounded-quality','hybrid-two-essays-v05-fair-comparison-scope','hybrid-two-essays-v06-clause-context-and-boundaries',PROMPT_VERSION}
 LEGACY_MODES={None,'hybrid-two-essays-v01','hybrid-two-essays-v02-static-and-clause-review',
     'hybrid-two-essays-v03-complete-and-scoped-review'}
 
@@ -64,10 +65,11 @@ def prepare_bundle(specs, texts, audited=True):
             {str(s.exercise):chart_guide(chart_matrix(s)) for s in specs},ensure_ascii=False,separators=(',',':'))+'\n'
         prompt+=(Path(__file__).resolve().parents[1]/'prompts'/'hybrid-v06.txt').read_text(encoding='utf-8')
         prompt+='\nCOMPUTED BOUNDARY FACTS:\n'+json.dumps({str(s.exercise):strict_boundary_facts(texts[str(s.exercise)],chart_matrix(s)) for s in specs},ensure_ascii=False,separators=(',',':'))+'\n'
+    prompt+='\n'+TEACHING_FAIRNESS+'\n'
     prompt+=json.dumps(records,ensure_ascii=False,separators=(',',':'))
     return prompt,digest(json.dumps(records,ensure_ascii=False,sort_keys=True))
 
-def restore_bundle(bundle, specs, texts):
+def restore_bundle(bundle, specs, texts, teaching_fairness=False):
     if sorted(e.exercise for e in bundle.essays)!=sorted(s.exercise for s in specs):
         raise ValueError('Bundle duplicates, omits or invents an exercise')
     by_id={e.exercise:e for e in bundle.essays}
@@ -77,6 +79,8 @@ def restore_bundle(bundle, specs, texts):
         original=texts[str(spec.exercise)]
         if item.source_digest!=digest(original):
             raise ValueError('Bundle source identity differs from frozen essay')
+        if teaching_fairness:
+            validate_teaching_fairness(item,spec)
         if isinstance(item,AuditedBundledEssayFeedback):
             for correction in item.corrections:
                 correction.original=source_quote(correction.original,original)
@@ -151,7 +155,7 @@ def grade_bundle(ai, settings, specs, texts, checkpoint, pending=None):
         pending.update(status='received',result=bundle.model_dump(mode='json'))
         checkpoint(pending.copy())
     try:
-        results=restore_bundle(bundle,specs,texts)
+        results=restore_bundle(bundle,specs,texts,teaching_fairness=pending.get('mode')==PROMPT_VERSION)
     except Exception:
         checkpoint({**pending,'status':'held'})
         raise
@@ -170,7 +174,7 @@ def verify_saved_quality(state,binding):
     if work.get('model') not in ('gemini-3.1-pro-preview','gemini-3.8-flash') or digest(work.get('prompt',''))!=work.get('prompt_sha256'):
         raise ValueError('Frozen quality model/prompt changed before delivery')
     schema=AuditedProEssayBundle if work.get('model')=='gemini-3.1-pro-preview' else AuditedFlashEssayBundle
-    results=restore_bundle(schema.model_validate(work['result']),binding.essays,state['source']['essay_texts'])
+    results=restore_bundle(schema.model_validate(work['result']),binding.essays,state['source']['essay_texts'],teaching_fairness=work.get('mode')==PROMPT_VERSION)
     expected=[r.model_dump(mode='json') for r in results]
     if expected!=state.get('payload',{}).get('essays'):
         raise ValueError('Delivery differs from the source-grounded checked result')

@@ -33,7 +33,12 @@ def resolve_package(specs,root=None):
             if fingerprint(package)!=entry['manifest_sha256']:raise ValueError('Lesson package manifest changed')
             for ref in package['prompt_files']:
                 source=(ROOT.parent/ref['path']).resolve()
-                if not source.is_relative_to(ROOT.parent.resolve()) or hashlib.sha256(source.read_bytes()).hexdigest()!=ref['sha256']:
+                if not source.is_relative_to(ROOT.parent.resolve()):
+                    raise ValueError('Reusable prompt path escapes library')
+                raw=source.read_bytes()
+                if ref.get('normalization')=='lf':raw=raw.replace(b'\r\n',b'\n')
+                elif ref.get('normalization') is not None:raise ValueError('Unknown prompt hash normalization')
+                if hashlib.sha256(raw).hexdigest()!=ref['sha256']:
                     raise ValueError('Reusable prompt changed without a new package version')
             matches.append(package)
     if len(matches)>1:raise ValueError('Ambiguous active lesson package')
@@ -44,6 +49,8 @@ def verify_package_sources(binding,source_checksums):
     if package is None:return None
     if package['quality_status']=='live_quality_rejected':
         raise ValueError('Lesson package failed live quality review; prepare a new audited version before generation')
+    if package['quality_status']=='prepared_requires_live_trial':
+        raise ValueError('Prepared lesson package requires a separately authorized live quality trial before routine generation')
     if binding.lesson!=package['lesson'] or notebook_fingerprint(binding)!=package['notebook_fingerprint']:
         raise ValueError('Lesson package copying requirements differ; verify a new version')
     if sorted(source_checksums.values())!=package['assigned_source_sha256']:

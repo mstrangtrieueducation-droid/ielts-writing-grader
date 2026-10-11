@@ -33,6 +33,9 @@ def test_parent_bridge_identity_render_and_suppression():
         page.locator('[data-hybrid-essay] summary').click()
         assert page.get_by_text('Giải thích',exact=True).is_visible()
         assert page.locator('body script').count()==0
+        # An unrelated dashboard repaint must not flash the cached result back to loading.
+        cached=page.evaluate("ieltsHybridReviews_.fragment({skill:'writing'},testLegacy)")
+        assert 'data-hybrid-state="ready"' in cached and 'Đang mở bài chữa' not in cached
         # Wrong identity fails closed even with a valid encrypted envelope/key.
         page.evaluate("ieltsHybridReviews_.clear(); testPayload.student_name='Other Student';document.body.innerHTML=ieltsHybridReviews_.fragment({skill:'writing'},testLegacy)")
         page.wait_for_selector('[data-hybrid-state=error]')

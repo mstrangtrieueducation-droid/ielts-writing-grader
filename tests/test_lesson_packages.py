@@ -46,3 +46,22 @@ def test_rejected_live_package_blocks_other_classes_before_generation(binding,tm
     other=binding.model_copy(update={'class_name':'IELTS 99'})
     with pytest.raises(ValueError,match='failed live quality review'):
         module.verify_package_sources(other,{'source1':'verifiedhash'})
+
+def test_new_draft_is_not_live_approval_and_text_hash_is_portable(binding,tmp_path,monkeypatch):
+    import hashlib
+    root=library(binding,tmp_path,monkeypatch)
+    source=tmp_path/'prompt.txt';source.write_bytes(b'First\r\nSecond\r\n')
+    package=json.loads((root/'manifest.json').read_text())
+    package['quality_status']='prepared_requires_live_trial'
+    package['prompt_files']=[{'path':'prompt.txt','normalization':'lf',
+        'sha256':hashlib.sha256(b'First\nSecond\n').hexdigest()}]
+    (root/'manifest.json').write_text(json.dumps(package))
+    catalog=json.loads((root/'catalog.json').read_text())
+    catalog['packages'][0]['manifest_sha256']=module.fingerprint(package)
+    (root/'catalog.json').write_text(json.dumps(catalog))
+    with pytest.raises(ValueError,match='separately authorized live quality trial'):
+        module.verify_package_sources(binding,{'source1':'verifiedhash'})
+    source.write_bytes(b'First\nSecond\n')
+    assert module.resolve_package(binding.essays)['quality_status']=='prepared_requires_live_trial'
+    source.write_bytes(b'Changed\nSecond\n')
+    with pytest.raises(ValueError,match='prompt changed'):module.resolve_package(binding.essays)
