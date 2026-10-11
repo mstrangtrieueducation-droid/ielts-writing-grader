@@ -20,7 +20,42 @@ concurrency:
   group: ielts-grading-single-writer
   cancel-in-progress: false
 jobs:
+  cutover:
+    if: github.event_name == 'workflow_dispatch' || vars.SPLIT_GRADING_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 70
+    steps:
+      - name: Wait for legacy grading to finish without interrupting submissions
+        env:
+          MODE: ${{ inputs.mode || 'grade' }}
+          GH_TOKEN: ${{ github.token }}
+          LEGACY_WORKFLOWS: grade_writing.yml
+        run: |
+          python3 - <<'PY'
+          import os,json,time,urllib.request
+          if os.environ['MODE']!='grade':
+              print('No grading requested; handoff wait not needed.')
+              raise SystemExit(0)
+          base='https://api.github.com/repos/'+os.environ['GITHUB_REPOSITORY']
+          def read(path):
+              req=urllib.request.Request(base+path,headers={'Authorization':'Bearer '+os.environ['GH_TOKEN'],'Accept':'application/vnd.github+json'})
+              with urllib.request.urlopen(req,timeout=30) as r:return json.load(r)
+          deadline=time.monotonic()+65*60
+          while True:
+              pending=[]
+              for legacy in os.environ['LEGACY_WORKFLOWS'].split(','):
+                  if read('/actions/workflows/'+legacy)['state']=='active':
+                      raise SystemExit('Legacy schedule must be disabled before cutover: '+legacy)
+                  pending.extend(r['id'] for r in read('/actions/workflows/'+legacy+'/runs?per_page=100')['workflow_runs'] if r['status']!='completed')
+              if not pending:
+                  print('Legacy runs are completed. This lane may acquire its own grading lease.')
+                  break
+              if time.monotonic()>=deadline:raise SystemExit('Legacy handoff still pending; no grading started.')
+              print('Waiting for legacy runs: '+','.join(map(str,pending)),flush=True)
+              time.sleep(60)
+          PY
   grade:
+    needs: cutover
     if: github.event_name == 'workflow_dispatch' || vars.SPLIT_GRADING_ENABLED == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 120
