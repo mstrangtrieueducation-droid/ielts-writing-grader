@@ -171,4 +171,10 @@ Giả định bài viết: 3.000–5.000 token đầu vào gồm rubric/lý thuy
 
 Các con số là kịch bản, không phải token đã đo hoặc mức phí bảo đảm. Kiểm tra lại vở, OCR bài viết tay, nguồn dài hơn, output dài hơn hoặc tỷ giá/thuế thay đổi sẽ làm tăng chi phí. Không chuyển sang model khác hoặc cắt bớt lỗi để làm vừa ngân sách nếu chưa có hướng dẫn của Cô.
 
-Hạn chế cần lưu ý: đây là chấm bằng AI có kiểm toán tự động, không bảo đảm không bỏ sót lỗi; cần nghiệm thu rubric bằng bài thật. Tệp quá lớn bị giữ lại thay vì bớt trang. Video không bị tải xuống hoặc được chấm phát âm bởi luồng này. Không có tự tách danh tính trong một PDF cả lớp, không chuyển ngầm dashboard cũ, không tự sửa bài mẫu của Cô.
+Hạn chế cần lưu ý: đây là chấm bằng AI có kiểm toán tự động, không bảo đảm không bỏ sót lỗi; cần nghiệm thu rubric bằng bài thật. Tệp quá lớn bị giữ lại thay vì bớt trang. Video không bị tải xuống hoặc được chấm phát âm bởi luồng này. Không có tự tách danh tính trong một PDF cả lớp, không tự sửa bài mẫu của Cô.
+
+## Kết nối dashboard lớp hiện có
+
+`feedback_block` giữ dấu phân cách để đồng bộ ô Toàn diện chính xác, đồng thời lưu đường dẫn kết quả mã hóa của đúng học sinh và mã bài vào **ô riêng được xác thực**. Không đưa khóa giải mã hoặc nội dung học sinh vào HTML công khai. `parent-bridge.js` được trình dựng dùng chung của `ielts48-writing-live-20260909` nhúng vào trang phụ huynh; trang chỉ lấy đường dẫn từ phản hồi đã xác thực, đối chiếu lớp, họ tên, mã học sinh và mã bài trước khi hiển thị. Nhận xét vở thu gọn, hai bài viết mở riêng với toàn bộ lỗi, bản sửa và cụm từ; không thay đổi lời chấm đã lưu.
+
+Lớp/buổi phải có mục đúng trong manifest công khai và trang lớp phải được dựng, kiểm tra và phát hành bằng `publish_parent_page.py` trước khi giao kết quả. Không tự sửa các trang lớp khác hoặc chuyển liên kết phụ huynh sang trang mới. Quy trình chỉ hoàn tất sau cả kiểm tra trang mã hóa, ô Toàn diện và **dashboard lớp thật** qua `verify_parent_ui`; lỗi kết nối giữ trạng thái giao bài để tiếp tục, không gọi model lại. Kiểm tra giao diện phải dùng liên kết đang có trên đúng hàng Toàn diện, không dùng mapping phụ huynh lịch sử có thể đã đổi.

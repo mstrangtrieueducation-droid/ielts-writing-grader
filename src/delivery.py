@@ -1,6 +1,7 @@
 from .policy import TOO_LATE, check_suppression
+from urllib.parse import urlsplit, parse_qs, urlencode
 
-def feedback_block(payload):
+def feedback_block(payload, dashboard_url=None):
     state=payload['state']
     if state=='too_late':
         content=f"{TOO_LATE}\nThời gian nhận: {payload['received_display']}"
@@ -18,6 +19,16 @@ def feedback_block(payload):
             content+=f"\nĐề {essay['exercise']}: {essay['status']}\n{essay['summary_vi']}"
     if payload.get('received_display') and state!='too_late':
         content=('⚠️ ĐÃ NỘP MUỘN' if payload.get('submitted_late') else '✅ ĐÃ NỘP')+f"\nThời gian nhận: {payload['received_display']}\n"+content
+    if dashboard_url:
+        url=urlsplit(dashboard_url)
+        params=parse_qs(url.fragment)
+        if (url.scheme!='https' or url.hostname!='mstrangtrieueducation-droid.github.io'
+            or url.path!='/ielts-writing-grader/index.html' or url.query
+            or set(params)!={'p','k'} or any(len(v)!=1 for v in params.values())):
+            raise ValueError('Invalid private dashboard bridge URL')
+        # Kept only in the authenticated pupil's tracker cell. Never public HTML.
+        link=dashboard_url+'&'+urlencode({'a':payload['task_code'],'s':payload['student_id']})
+        content+='\nBài chữa chi tiết: '+link
     label={'vocabulary':'SỔ TỪ VỰNG','notebook':'VỞ CHÉP'}.get(payload['assignment_type'],'WRITING')
     return f'【KẾT QUẢ CHẤM {label}】\n{content}\n【HẾT KẾT QUẢ CHẤM】'
 
@@ -32,7 +43,7 @@ def deliver(state, binding, student, dashboard, sheets, store, spreadsheet, driv
     state['dashboard_evidence']=dashboard.publish(payload)
     state['phase']='dashboard_verified'
     store.save(state)
-    state['tracker_evidence']=sheets.write_feedback(spreadsheet,binding,student,feedback_block(payload))
+    state['tracker_evidence']=sheets.write_feedback(spreadsheet,binding,student,feedback_block(payload,dashboard.link(binding.class_name,student['id'])))
     if binding.dashboard_link_column:
         from .parsers import sheet_range
         cell=sheet_range(binding.tracker_tab,f"{binding.dashboard_link_column}{student['row']}")
@@ -44,6 +55,8 @@ def deliver(state, binding, student, dashboard, sheets, store, spreadsheet, driv
         if existing!=link:
             sheets.set_cell(spreadsheet,cell,link)
     state['phase']='tracker_verified'
+    store.save(state)
+    state['parent_dashboard_evidence']=dashboard.verify_parent_ui(payload,sheets.parent_link(spreadsheet,binding,student))
     store.save(state)
     if state['source'].get('scan_id'):
         drive.move_processed(state['source']['scan_id'],settings.incoming_folder,settings.processed_folder)

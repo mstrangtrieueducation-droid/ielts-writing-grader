@@ -54,6 +54,7 @@ class FakeSheets:
     def roster(self,*_): return [{'id':'S1','name':'Nguyễn Test','row':7}]
     def values(self,*_): return self.rows
     def has_prior_grading(self,*_): return False
+    def parent_link(self,*_): return 'https://mstrangtrieueducation-droid.github.io/abcdefgh/#p='+('p'*22)
     def write_feedback(self,spreadsheet,binding,student,block):
         if self.fail_once: self.fail_once=False; raise RuntimeError('Transient sheet failure')
         self.blocks.append(block); return {'cell':'AI7','exact_readback':True}
@@ -61,3 +62,5 @@ class FakeSheets:
 class FakeDashboard:
     def __init__(self): self.payloads=[]
     def publish(self,payload): self.payloads.append(payload); return {'live_payload_exact':True,'live_ui_verified':True}
+    def link(self,classroom,student_id): return 'https://mstrangtrieueducation-droid.github.io/ielts-writing-grader/index.html#p='+('a'*64)+'&k='+('b'*43)
+    def verify_parent_ui(self,payload,url): return {'live_parent_ui_verified':True,'identity_verified':True,'essays_verified':len(payload['essays'])}

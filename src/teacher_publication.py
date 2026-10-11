@@ -87,7 +87,9 @@ def deliver_teacher_authorized(pipeline,bindings,selection):
     publication=state['teacher_publication']
     publication['dashboard_evidence']=pipeline.dashboard.publish(payload)
     pipeline.store.save(state)
-    publication['tracker_evidence']=pipeline.sheets.write_feedback(spreadsheet,frozen,student,feedback_block(payload))
+    publication['tracker_evidence']=pipeline.sheets.write_feedback(spreadsheet,frozen,student,feedback_block(payload,pipeline.dashboard.link(frozen.class_name,student['id'])))
+    pipeline.store.save(state)
+    publication['parent_dashboard_evidence']=pipeline.dashboard.verify_parent_ui(payload,pipeline.sheets.parent_link(spreadsheet,frozen,student))
     publication['status']='published'
     pipeline.store.save(state)
     return {'delivered':1,'essays':len(payload['essays']),'tracker_verified':bool(publication['tracker_evidence'].get('exact_readback')),

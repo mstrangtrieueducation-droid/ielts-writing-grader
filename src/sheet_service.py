@@ -1,4 +1,5 @@
 import json
+import re
 from googleapiclient.discovery import build
 from .parsers import col_number, normalize_name, sheet_range
 from .schemas import Binding
@@ -28,6 +29,15 @@ class SheetService:
     def values(self, spreadsheet, range_, formula=False):
         return retry(lambda: self.api.spreadsheets().values().get(spreadsheetId=spreadsheet,
             range=range_, valueRenderOption='FORMULA' if formula else 'FORMATTED_VALUE').execute()).get('values', [])
+
+    def parent_link(self, spreadsheet, binding, student):
+        """Resolve the existing parent's link from this exact roster row only."""
+        data=retry(lambda:self.api.spreadsheets().get(spreadsheetId=spreadsheet,
+            ranges=[sheet_range(binding.tracker_tab,f"A{student['row']}:AZ{student['row']}")],
+            includeGridData=True,fields='sheets(data(rowData(values(formattedValue,hyperlink,textFormatRuns))))').execute())
+        links=set(re.findall(r'https://mstrangtrieueducation-droid\.github\.io/[a-z0-9]{8}/#p=[A-Za-z0-9_-]{22}(?![A-Za-z0-9_-])',json.dumps(data)))
+        if len(links)!=1:raise ValueError('Exact roster row must have one existing parent dashboard link')
+        return links.pop()
 
     def set_cell(self, spreadsheet, range_, value):
         retry(lambda: self.api.spreadsheets().values().update(spreadsheetId=spreadsheet,

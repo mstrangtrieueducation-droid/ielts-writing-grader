@@ -70,3 +70,11 @@ def test_saved_delivery_can_resume_tracker_failure_without_regrading(binding,set
     with pytest.raises(RuntimeError,match='Transient'):deliver_teacher_authorized(p,[b],selection)
     assert s['teacher_publication']['dashboard_evidence']['live_ui_verified']
     assert deliver_teacher_authorized(p,[b],selection)['tracker_verified']
+
+def test_parent_portal_failure_does_not_mark_publication_complete(binding,settings):
+    p,b,s,selection=setup(binding,settings)
+    p.dashboard.verify_parent_ui=lambda *_:(_ for _ in ()).throw(ValueError('Parent cards absent'))
+    with pytest.raises(ValueError,match='Parent cards absent'):deliver_teacher_authorized(p,[b],selection)
+    assert s['teacher_publication'].get('status')!='published'
+    assert s['teacher_publication']['tracker_evidence']['exact_readback']
+    assert s['pilot_review']['status']=='rejected'

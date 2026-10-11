@@ -93,6 +93,38 @@ class Dashboard:
                     raise RuntimeError('Pages build request was not accepted')
         retry(submit)
 
+    def verify_parent_ui(self, payload, parent_url):
+        """The existing classroom portal is part of delivery, not just the new site."""
+        import re
+        from playwright.sync_api import sync_playwright
+        if not re.fullmatch(r'https://mstrangtrieueducation-droid\.github\.io/[a-z0-9]{8}/#p=[A-Za-z0-9_-]{22}',parent_url):
+            raise ValueError('Invalid parent dashboard link')
+        with sync_playwright() as p:
+            browser=p.chromium.launch(headless=True)
+            try:
+                page=browser.new_page()
+                page.goto(parent_url,wait_until='domcontentloaded',timeout=60000)
+                page.wait_for_function("typeof parentState!=='undefined'&&parentState.authorized&&typeof state!=='undefined'&&state.student&&state.dashboard",timeout=60000)
+                actual=page.evaluate('({name:parentState.name,className:ieltsParentAccess.className})')
+                from .parsers import normalize_name
+                if actual['className']!=payload['class_name'] or normalize_name(actual['name'])!=normalize_name(payload['student_name']):
+                    raise ValueError('Parent dashboard identity mismatch')
+                gate=page.locator('#ielts-pending-work-gate')
+                if gate.is_visible():gate.get_by_role('button').first.click()
+                page.get_by_role('button',name='Writing · Viết',exact=True).click()
+                target=page.locator('[data-hybrid-result]').filter(has=page.locator('.hy-head')).filter(has_text=f"Buổi {payload['lesson']}").first
+                target.wait_for(state='visible',timeout=60000)
+                if target.get_attribute('data-hybrid-state')!='ready':raise ValueError('Parent feedback not loaded')
+                expected=len(payload['essays']) if payload['state']=='graded' else 0
+                if target.locator('[data-hybrid-essay]').count()!=expected:raise ValueError('Parent essay count differs')
+                if '【KẾT QUẢ CHẤM' in target.inner_text():raise ValueError('Internal tracker markers exposed')
+                for essay in payload['essays'] if payload['state']=='graded' else []:
+                    detail=target.locator(f'[data-hybrid-essay="{essay["exercise"]}"]')
+                    detail.locator('summary').click()
+                    if essay['original'] not in detail.inner_text():raise ValueError('Parent original essay differs')
+                return {'live_parent_ui_verified':True,'identity_verified':True,'essays_verified':expected}
+            finally:browser.close()
+
     def verify_ui(self, payload):
         from playwright.sync_api import sync_playwright
         with sync_playwright() as p:
