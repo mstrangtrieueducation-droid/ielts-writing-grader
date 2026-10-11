@@ -26,6 +26,7 @@ class Settings:
     state_oauth: dict | None = None
     student_budget_vnd: int = 1000
     essay_service_tier: str = 'standard'
+    essay_bundle: bool = False
 
     @classmethod
     def from_env(cls):
@@ -65,7 +66,8 @@ class Settings:
             raise ValueError('Notebook/OCR must use Flash; essays use Flash or an explicit text-only Pro bundle')
         from dataclasses import replace
         settings=replace(settings,student_budget_vnd=int(os.getenv('GEMINI_STUDENT_BUDGET_VND','1000')),
-            essay_service_tier=os.getenv('GEMINI_ESSAY_SERVICE_TIER','standard'))
+            essay_service_tier=os.getenv('GEMINI_ESSAY_SERVICE_TIER','standard'),
+            essay_bundle=os.getenv('GEMINI_ESSAY_BUNDLE','false')=='true')
         if settings.student_budget_vnd<1:
             raise ValueError('Student budget must be positive')
         if settings.essay_service_tier not in ('standard','flex'):

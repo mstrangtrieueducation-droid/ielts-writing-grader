@@ -188,6 +188,10 @@ class ProEssayBundle(Strict):
     # One student's two homework essays, never a bundle of different students.
     essays: list[BundledEssayFeedback] = Field(min_length=2, max_length=2)
 
+class FlashEssayBundle(ProEssayBundle):
+    # Separate schema identity keeps historical Pro attempts/model routing intact.
+    pass
+
 class QualityReview(Strict):
     approved: bool
     issues: list[str]

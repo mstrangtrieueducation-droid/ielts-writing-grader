@@ -1,9 +1,9 @@
-"""One text-only Pro response for one student's two homework essays.
+"""One text-only response for one student's two homework essays.
 
 No PDF/image transfer, paid reviewer, regeneration or manual feedback patching.
 """
 import json
-from ..schemas import ProEssayBundle,ThoroughFlashResult,ThoroughFlashTask1Result
+from ..schemas import ProEssayBundle,FlashEssayBundle,ThoroughFlashResult,ThoroughFlashTask1Result
 from ..parsers import word_count,essay_paragraphs,digest
 from .essay_grader import RUBRIC,LANGUAGE_AUDIT,NUMERICAL_AUDIT,language_units,validate_essay
 
@@ -62,21 +62,27 @@ def restore_bundle(bundle, specs, texts):
     return output
 
 def grade_bundle(ai, settings, specs, texts, checkpoint, pending=None):
-    if settings.essay_model!='gemini-3.1-pro-preview':
-        raise ValueError('Pro bundle requires explicit Pro essay configuration')
+    if settings.essay_model=='gemini-3.1-pro-preview':
+        schema=ProEssayBundle
+    elif settings.essay_model=='gemini-3.8-flash' and getattr(settings,'essay_bundle',False):
+        schema=FlashEssayBundle
+    else:
+        raise ValueError('Bundle requires explicitly configured Pro or Flash bundle mode')
     prompt,source_digest=prepare_bundle(specs,texts)
     if pending:
+        if pending.get('model')!=settings.essay_model:
+            raise ValueError('Saved bundle model differs; preserve the original attempt')
         if pending.get('source_digest')!=source_digest:
             raise ValueError('Saved bundle differs from frozen essays/specifications')
         if pending.get('status') not in ('received','validated'):
             raise ValueError('Saved bundle attempt is unresolved; no automatic paid regeneration')
-        bundle=ProEssayBundle.model_validate(pending['result'])
+        bundle=schema.model_validate(pending['result'])
     else:
         pending={'source_digest':source_digest,'status':'reserved','mode':PROMPT_VERSION,
             'model':settings.essay_model,'prompt_sha256':digest(prompt)}
         checkpoint(pending.copy())
         try:
-            bundle=ai.structured(settings.essay_model,prompt,ProEssayBundle,())
+            bundle=ai.structured(settings.essay_model,prompt,schema,())
         except Exception:
             checkpoint({**pending,'status':'held'})
             raise

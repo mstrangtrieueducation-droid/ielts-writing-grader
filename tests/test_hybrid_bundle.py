@@ -1,7 +1,7 @@
 from types import SimpleNamespace
 import json
 import pytest
-from src.schemas import ProEssayBundle
+from src.schemas import ProEssayBundle,FlashEssayBundle
 from src.parsers import digest
 from src.graders.essay_grader import language_units
 from src.graders.essay_bundle import grade_bundle,prepare_bundle,restore_bundle
@@ -45,6 +45,23 @@ def test_two_originals_one_request_durable_replay(binding):
     assert [x.model_dump() for x in first]==[x.model_dump() for x in second]
     assert work[0]['status']=='reserved' and work[-1]['status']=='validated'
     assert 'original' not in response.essays[0].model_dump()
+
+def test_flash_two_essays_explicit_one_call_and_replay(binding,monkeypatch):
+    specs,texts,response=originals(binding)
+    ai,calls,*_=service(binding,monkeypatch,response.model_dump_json())
+    ai.essay_model='gemini-3.8-flash';ai.essay_bundle=True
+    settings=SimpleNamespace(essay_model=ai.essay_model,essay_bundle=True)
+    checkpoints=[]
+    result=grade_bundle(ai,settings,specs,texts,checkpoints.append)
+    repeated=grade_bundle(ai,settings,specs,texts,checkpoints.append,checkpoints[-1])
+    assert len(calls)==1 and calls[0]['model']=='gemini-3.8-flash'
+    assert len(result)==len(repeated)==2 and all(part.inline_data is None for part in calls[0]['contents'])
+    assert calls[0]['config'].max_output_tokens==8192
+    ai.essay_bundle=False
+    with pytest.raises(ValueError,match='Flash-only'):
+        ai.structured('gemini-3.8-flash','prompt',FlashEssayBundle)
+    with pytest.raises(ValueError,match='model differs'):
+        grade_bundle(ai,SimpleNamespace(essay_model='gemini-3.1-pro-preview'),specs,texts,checkpoints.append,checkpoints[-1])
 
 def test_bundle_timeout_or_identity_error_never_repaid(binding):
     specs,texts,response=originals(binding)

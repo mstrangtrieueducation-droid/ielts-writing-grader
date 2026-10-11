@@ -121,7 +121,7 @@ class Pipeline:
             return
         if self.ai is not None and hasattr(self.ai,'bind_budget'):
             self.ai.bind_budget(self.store,binding,state)
-        hybrid=self.settings.essay_model=='gemini-3.1-pro-preview'
+        hybrid=self.settings.essay_model=='gemini-3.1-pro-preview' or getattr(self.settings,'essay_bundle',False)
         if hybrid and binding.assignment_type in ('homework','assessment') and not state['essay_results'] and not state.get('bundle_work'):
             if self.ai is None or not hasattr(self.ai,'preflight_student_plan'):
                 raise ValueError('Hybrid budget planning is required before notebook generation')
