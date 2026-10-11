@@ -32,3 +32,17 @@ def test_modified_manifest_is_not_silently_reused(binding,tmp_path,monkeypatch):
     p=json.loads((root/'manifest.json').read_text());p['quality_status']='accepted'
     (root/'manifest.json').write_text(json.dumps(p))
     with pytest.raises(ValueError,match='manifest changed'):module.resolve_package(binding.essays)
+
+def test_rejected_live_package_blocks_other_classes_before_generation(binding,tmp_path,monkeypatch):
+    root=library(binding,tmp_path,monkeypatch)
+    package=json.loads((root/'manifest.json').read_text())
+    package['quality_status']='live_quality_rejected'
+    (root/'manifest.json').write_text(json.dumps(package))
+    catalog=json.loads((root/'catalog.json').read_text())
+    catalog['packages'][0]['manifest_sha256']=module.fingerprint(package)
+    (root/'catalog.json').write_text(json.dumps(catalog))
+    # Preserved prompts can still be inspected without activation or generation.
+    assert module.resolve_package(binding.essays)['quality_status']=='live_quality_rejected'
+    other=binding.model_copy(update={'class_name':'IELTS 99'})
+    with pytest.raises(ValueError,match='failed live quality review'):
+        module.verify_package_sources(other,{'source1':'verifiedhash'})

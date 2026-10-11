@@ -42,6 +42,8 @@ def resolve_package(specs,root=None):
 def verify_package_sources(binding,source_checksums):
     package=resolve_package(binding.essays)
     if package is None:return None
+    if package['quality_status']=='live_quality_rejected':
+        raise ValueError('Lesson package failed live quality review; prepare a new audited version before generation')
     if binding.lesson!=package['lesson'] or notebook_fingerprint(binding)!=package['notebook_fingerprint']:
         raise ValueError('Lesson package copying requirements differ; verify a new version')
     if sorted(source_checksums.values())!=package['assigned_source_sha256']:

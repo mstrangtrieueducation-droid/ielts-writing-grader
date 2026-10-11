@@ -2,7 +2,7 @@
   "id": "B14-HOMEWORK-NOTREND",
   "version": "v06",
   "lesson": 14,
-  "quality_status": "prepared_not_live_accepted",
+  "quality_status": "live_quality_rejected",
   "essay_fingerprint": "c23b969d45e0332425940fd919d03911624bbd9be9f02b9d033f6d94afa2aa25",
   "notebook_fingerprint": "cf6b8f290461b767c110d02a80d51476b15b64f1eb9f0a9a4391ea8e0bdd7014",
   "assigned_source_sha256": [
@@ -32,5 +32,6 @@
   ],
   "essay_model_role": "Pro text-only two-essay bundle; no paid review loop",
   "notebook_model_role": "Flash verified full assigned notebook; reuse only with matching evidence",
-  "authorization": "No class, student, receipt, activation or spending permission is granted by this package."
+  "authorization": "No class, student, receipt, activation or spending permission is granted by this package.",
+  "quality_note": "Two live bundles failed independent review. Exact existing outputs may be published on separately recorded teacher instruction; publication does not approve this prompt for future classes."
 }

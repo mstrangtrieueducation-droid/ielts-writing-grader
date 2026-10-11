@@ -7,7 +7,7 @@ on:
       mode:
         description: 'Validate access first, or run grading'
         type: choice
-        options: [preflight, pilot, collect-pro-batch, deliver-pilot, deliver-pilot-notebook, grade]
+        options: [preflight, pilot, collect-pro-batch, deliver-pilot, deliver-pilot-notebook, deliver-teacher-authorized, grade]
         default: preflight
       authorized_flash_trial:
         description: 'Explicitly authorized bounded Flash pilot; leaves scheduled generation off'
@@ -54,7 +54,7 @@ jobs:
     timeout-minutes: 120
     env:
       GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-      GEMINI_GENERATION_ENABLED: ${{ (inputs.mode == 'collect-pro-batch' || inputs.mode == 'deliver-pilot' || inputs.mode == 'deliver-pilot-notebook') && 'false' || inputs.mode == 'pilot' && (inputs.authorized_flash_trial || inputs.authorized_hybrid_trial || inputs.authorized_flash_bundle_trial || inputs.authorized_pro_batch_trial || inputs.authorized_pro_standard_trial) && 'true' || vars.GEMINI_GENERATION_ENABLED }}
+      GEMINI_GENERATION_ENABLED: ${{ (inputs.mode == 'collect-pro-batch' || inputs.mode == 'deliver-pilot' || inputs.mode == 'deliver-pilot-notebook' || inputs.mode == 'deliver-teacher-authorized') && 'false' || inputs.mode == 'pilot' && (inputs.authorized_flash_trial || inputs.authorized_hybrid_trial || inputs.authorized_flash_bundle_trial || inputs.authorized_pro_batch_trial || inputs.authorized_pro_standard_trial) && 'true' || vars.GEMINI_GENERATION_ENABLED }}
       PILOT_BATCH_SUBMIT_AUTHORIZED: ${{ inputs.mode == 'pilot' && inputs.authorized_pro_batch_trial && 'true' || 'false' }}
       GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
       GOOGLE_STATE_OAUTH_JSON: ${{ secrets.GOOGLE_STATE_OAUTH_JSON }}
@@ -111,3 +111,6 @@ jobs:
       - name: Return independently verified notebook while essays remain held
         if: github.event_name == 'workflow_dispatch' && inputs.mode == 'deliver-pilot-notebook'
         run: python -m src.main --deliver-pilot-notebook
+      - name: Publish exact saved output on explicit teacher instruction
+        if: github.event_name == 'workflow_dispatch' && inputs.mode == 'deliver-teacher-authorized'
+        run: python -m src.main --deliver-teacher-authorized

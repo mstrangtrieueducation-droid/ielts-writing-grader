@@ -2,6 +2,10 @@
 
 ## Prompt v06 và tái dùng giữa các lớp
 
+**Cập nhật 12/10/2026:** hai lượt sinh thật với v06 đều chưa đạt. Gói hiện là `live_quality_rejected`; `verify_package_sources` chặn gọi model với gói này cho mọi lớp. 137 kiểm thử chuẩn bị trước đây không chứng minh chất lượng model. Giữ nguyên raw, prompt đã gọi và các khoản chi; phải có phiên bản được sửa, kiểm thử và quyền chi tiêu mới trước bất kỳ lượt sinh tiếp theo. Không tự nâng trần hoặc hạ kiểm tra để công bố bản chưa đạt.
+
+Khi Cô đã được báo các lỗi và vẫn yêu cầu quy trình đăng **đúng bản hiện có**, dùng riêng `deliver-teacher-authorized`. Mỗi hồ sơ cần xác nhận rõ, dấu kiểm raw/nguồn/binding/payload và toàn bộ tệp nguồn. Luồng đăng hiển thị bình thường, xác minh dashboard thật rồi đọc lại chính xác Toàn diện, không gọi model. Nhật ký đánh giá chất lượng, raw và prompt không bị sửa thành đạt. Chỉ thị đăng một bản có sẵn không cho phép tự chấm thêm, không bỏ điều kiện vở/mốc nhận, và không áp dụng cho lớp khác. Kiểm thử bao gồm nội dung bị thay sau xác nhận, khóa vở, cờ sinh trả phí và phục hồi lỗi ghi Toàn diện.
+
 V06 làm rõ `correction_quote` phải là trích nguyên văn bài gốc, không phải lời giải thích tiếng Việt; kiểm tra mọi chỉnh sửa có nội dung; tính trước các ô bằng mốc so sánh nghiêm ngặt để model kiểm tra `>`/`<` với từng nhóm. Không tự gán lỗi nếu chưa xác định được nhóm/hạng mục.
 
 Bộ kiểm tra chấp nhận phạm vi đặt trước nhận định trong cùng mệnh đề và cặp số gắn đúng thứ tự `respectively`. Không lấy phạm vi từ câu/mệnh đề khác ngoài trích dẫn, không biến hai số của hai nhóm thành mỗi số áp dụng cho cả hai. Trường hợp một câu gộp hai ngành vẫn phải kiểm tra từng ngành cho mọi quốc gia được gộp. Những lỗi số liệu thật, số không có bằng chứng và kết quả bị giữ lại vẫn không được xuất bản.
