@@ -22,6 +22,7 @@ def test_parent_bridge_identity_render_and_suppression():
           window.testPayload=payload;
           window.fetch=async()=>{const bytes=await crypto.subtle.encrypt({name:'AES-GCM',iv:nonce,additionalData:new TextEncoder().encode(profile)},key,new TextEncoder().encode(JSON.stringify({schema_version:1,assignments:{[payload.task_code]:payload}})));return {ok:true,json:async()=>({nonce:base64(nonce),ciphertext:base64(bytes)})};};
           window.testLegacy='<div><p><strong>Nhận xét bài tập về nhà:</strong> Đã nộp</p><div class="ielts-feedback-message">Ghi chú tay\\n【KẾT QUẢ CHẤM WRITING】\\nChi tiết\\nhttps://mstrangtrieueducation-droid.github.io/ielts-writing-grader/index.html#p='+profile+'&amp;k='+base64(secret)+'&amp;a=IELTS-WRITING-W14&amp;s=1\\n【HẾT KẾT QUẢ CHẤM】</div></div>';
+          testLegacy=testLegacy.replace(/\\./g,'. ');
           document.body.innerHTML=ieltsHybridReviews_.fragment({skill:'writing'},testLegacy);
           return true;
         }""")

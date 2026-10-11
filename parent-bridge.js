@@ -11,6 +11,10 @@ const ieltsHybridReviews_ = (() => {
   function clear(){epoch++;cache.clear();document.querySelectorAll('[data-hybrid-result]').forEach(n=>n.replaceChildren());}
   const b64=v=>Uint8Array.from(atob(v.replace(/-/g,'+').replace(/_/g,'/')+'='.repeat((4-v.length%4)%4)),c=>c.charCodeAt(0));
   function pointer(text){
+    // The legacy feedback typography inserts spaces after full stops, including
+    // domain/path dots. Normalize only for parsing the allowlisted pointer;
+    // never rewrite saved feedback or display prose.
+    text=text.replace(/\.\s+/g,'.');
     const found=[...text.matchAll(/https:\/\/mstrangtrieueducation-droid\.github\.io\/ielts-writing-grader\/index\.html#[A-Za-z0-9_=&%-]+/g)];
     if(found.length!==1)return null;
     const url=new URL(found[0][0]),p=new URLSearchParams(url.hash.slice(1));

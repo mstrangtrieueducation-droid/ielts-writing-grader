@@ -112,9 +112,17 @@ class Dashboard:
                 gate=page.locator('#ielts-pending-work-gate')
                 if gate.is_visible():gate.get_by_role('button').first.click()
                 page.get_by_role('button',name='Writing · Viết',exact=True).click()
-                target=page.locator('[data-hybrid-result]').filter(has=page.locator('.hy-head')).filter(has_text=f"Buổi {payload['lesson']}").first
-                target.wait_for(state='visible',timeout=60000)
-                if target.get_attribute('data-hybrid-state')!='ready':raise ValueError('Parent feedback not loaded')
+                target=page.locator(f'[data-hybrid-result$="|{payload["task_code"]}"][data-hybrid-state="ready"]')
+                if payload['state'] in {'too_late','notebook_failed'}:
+                    gate=page.locator(f'.wr-assignment[data-wr-assignment="{payload["task_code"]}"]')
+                    if gate.count() and gate.is_visible():
+                        if gate.locator('[data-wr-open],[data-wr-task],[data-hybrid-essay]').count():raise ValueError('Parent gate exposes essay details')
+                        expected_warning='NỘP QUÁ MUỘN' if payload['state']=='too_late' else 'KHÔNG ĐƯỢC CHẤM'
+                        if expected_warning not in gate.inner_text():raise ValueError('Parent warning absent')
+                        return {'live_parent_ui_verified':True,'identity_verified':True,'essays_verified':0,'suppression_verified':True}
+                # Prepared profile refresh runs independently after the sheet write.
+                # Wait for its real projection; never substitute an injected preview.
+                target.wait_for(state='visible',timeout=180000)
                 expected=len(payload['essays']) if payload['state']=='graded' else 0
                 if target.locator('[data-hybrid-essay]').count()!=expected:raise ValueError('Parent essay count differs')
                 if '【KẾT QUẢ CHẤM' in target.inner_text():raise ValueError('Internal tracker markers exposed')

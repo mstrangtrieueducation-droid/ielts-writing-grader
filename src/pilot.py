@@ -184,7 +184,9 @@ def deliver_pilot_notebook(pipeline,bindings,selection):
     pipeline.store.save(state)
     publication['dashboard_evidence']=pipeline.dashboard.publish(payload)
     pipeline.store.save(state)
-    publication['tracker_evidence']=pipeline.sheets.write_feedback(spreadsheet,binding,student,feedback_block(payload))
+    publication['tracker_evidence']=pipeline.sheets.write_feedback(spreadsheet,binding,student,feedback_block(payload,pipeline.dashboard.link(binding.class_name,student['id'])))
+    pipeline.store.save(state)
+    publication['parent_dashboard_evidence']=pipeline.dashboard.verify_parent_ui(payload,pipeline.sheets.parent_link(spreadsheet,binding,student))
     pipeline.store.save(state)
     return {'notebooks_published':1,'essays_published':0,'model_generation_calls':0,
         'tracker_verified':bool(publication['tracker_evidence'].get('exact_readback')),'grading_complete':False}
