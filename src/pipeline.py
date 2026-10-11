@@ -126,6 +126,15 @@ class Pipeline:
             if self.ai is None or not hasattr(self.ai,'preflight_student_plan'):
                 raise ValueError('Hybrid budget planning is required before notebook generation')
             self.ai.preflight_student_plan(binding)
+            from .lesson_packages import resolve_package
+            from .teacher_knowledge import load_corpus
+            package=resolve_package(binding.essays)
+            if package and package.get('full_teacher_sources'):
+                # Teacher text only. Full-input affordability is checked before notebook images or Flash.
+                corpus=load_corpus(self.store,state,package)
+                from .graders.essay_bundle import prepare_bundle
+                prompt,_=prepare_bundle(binding.essays,source['essay_texts'],teacher_knowledge=corpus)
+                self.ai.preflight_bundle_prompt(prompt)
         references=self.files(binding.source_file_ids)
         checksums={fid:hashlib.sha256(data).hexdigest() for fid,data,_ in references}
         from .lesson_packages import verify_package_sources
@@ -190,7 +199,7 @@ class Pipeline:
                 state['bundle_work']=work
                 self.store.save(state)
             results=grade_bundle(self.ai,self.settings,binding.essays,source['essay_texts'],
-                bundle_checkpoint,state.get('bundle_work'))
+                bundle_checkpoint,state.get('bundle_work'),teacher_knowledge=state.get('teacher_knowledge'))
             state['essay_results']={str(result.exercise):result.model_dump(mode='json') for result in results}
             self.store.save(state)
         for spec in binding.essays:

@@ -6,7 +6,7 @@ from src.sheet_service import SheetService
 from src.schemas import EssayResult
 from src.graders.essay_grader import validate_essay
 from src.announcements import draft
-from conftest import notebook, essay
+from conftest import notebook, essay, pdf
 
 def test_second_notebook_audit_disagreement_holds(binding,settings):
     class AI:
@@ -16,7 +16,7 @@ def test_second_notebook_audit_disagreement_holds(binding,settings):
             return notebook('missing' if len(self.calls)==1 else 'complete')
     ai=AI()
     with pytest.raises(ValueError,match='disagree'):
-        grade_notebook(ai,settings,binding,[],[],{'notebook_file_123':1})
+        grade_notebook(ai,settings,binding,[],[('teacher',pdf(),'application/pdf')],{'notebook_file_123':1})
     assert ai.calls==['flash','flash']
 
 def test_pro_notebook_config_rejected_without_model(binding,settings):

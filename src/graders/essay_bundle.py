@@ -18,7 +18,7 @@ AUDITED_MODES={'hybrid-two-essays-v04-source-grounded-quality','hybrid-two-essay
 LEGACY_MODES={None,'hybrid-two-essays-v01','hybrid-two-essays-v02-static-and-clause-review',
     'hybrid-two-essays-v03-complete-and-scoped-review'}
 
-def prepare_bundle(specs, texts, audited=True):
+def prepare_bundle(specs, texts, audited=True, teacher_knowledge=None, frozen_replay=False):
     from ..lesson_packages import resolve_package
     package=resolve_package(specs) if audited else None
     if len(specs)!=2 or len({s.exercise for s in specs})!=2:
@@ -65,6 +65,11 @@ def prepare_bundle(specs, texts, audited=True):
             prompt+='\nReusable lesson package: '+package['id']+'/'+package['version']+'\n'
             if package.get('teaching_context'):
                 prompt+='\nVERIFIED TAUGHT KNOWLEDGE FOR THIS LESSON:\n'+package['teaching_context']+'\n'
+            if package.get('full_teacher_sources') and not frozen_replay:
+                from ..teacher_knowledge import render_corpus
+                if teacher_knowledge is None:
+                    raise ValueError('Full teacher theory and models required; summary-only grading prohibited')
+                prompt+='\n'+render_corpus(teacher_knowledge,package['full_teacher_sources'])+'\n'
         prompt+=QUALITY_CONTRACT+'\nTRUSTED CHART MATRICES:\n'+json.dumps(
             {str(s.exercise):chart_guide(chart_matrix(s)) for s in specs},ensure_ascii=False,separators=(',',':'))+'\n'
         prompt+=(Path(__file__).resolve().parents[1]/'prompts'/'hybrid-v06.txt').read_text(encoding='utf-8')
@@ -105,7 +110,7 @@ def restore_bundle(bundle, specs, texts, teaching_fairness=False):
         output.append(validate_essay(schema.model_validate(data),original,spec))
     return output
 
-def grade_bundle(ai, settings, specs, texts, checkpoint, pending=None):
+def grade_bundle(ai, settings, specs, texts, checkpoint, pending=None, teacher_knowledge=None):
     if pending and pending.get('mode') not in LEGACY_MODES|AUDITED_MODES:
         raise ValueError('Unknown frozen bundle contract; preserve the attempt without regeneration')
     audited=not pending or pending.get('mode') in AUDITED_MODES
@@ -115,7 +120,8 @@ def grade_bundle(ai, settings, specs, texts, checkpoint, pending=None):
         schema=AuditedFlashEssayBundle if audited else FlashEssayBundle
     else:
         raise ValueError('Bundle requires explicitly configured Pro or Flash bundle mode')
-    prompt,source_digest=prepare_bundle(specs,texts,audited=audited)
+    prompt,source_digest=prepare_bundle(specs,texts,audited=audited,teacher_knowledge=teacher_knowledge,
+        frozen_replay=bool(pending and pending.get('prompt')))
     if pending:
         if pending.get('model')!=settings.essay_model:
             raise ValueError('Saved bundle model differs; preserve the original attempt')

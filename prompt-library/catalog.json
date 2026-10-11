@@ -2,8 +2,8 @@
   "schema_version": 1,
   "packages": [
     {
-      "manifest": "B14-HOMEWORK-NOTREND/v08/manifest.json",
-      "manifest_sha256": "f59cfd43dd49714880f9f43f8ed4e23a59269923e2785562f0ea369c653f4df1"
+      "manifest": "B14-HOMEWORK-NOTREND/v09/manifest.json",
+      "manifest_sha256": "fe43e838bb8068fe78c4f3f218e0ad4a64b92cba232c90761f08b6b6217cdaf7"
     }
   ],
   "history": [
@@ -14,6 +14,10 @@
     {
       "manifest": "B14-HOMEWORK-NOTREND/v07/manifest.json",
       "manifest_sha256": "806bf2aff8ab7cd8c1efd969d612bc0858b9147de86db752ea44dec18240d598"
+    },
+    {
+      "manifest": "B14-HOMEWORK-NOTREND/v08/manifest.json",
+      "manifest_sha256": "f59cfd43dd49714880f9f43f8ed4e23a59269923e2785562f0ea369c653f4df1"
     }
   ]
 }

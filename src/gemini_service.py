@@ -1,6 +1,7 @@
 import json
 import hashlib
 import os
+import math
 from datetime import datetime, timezone
 from google import genai
 from google.genai import types
@@ -42,6 +43,7 @@ class GeminiService:
         self.pro_max_output_tokens=getattr(settings,'pro_max_output_tokens',8192)
 
     def bind_budget(self, store, binding, state):
+        self.planned_essay_reserve=0
         output_limit=getattr(self,'pro_max_output_tokens',8192)
         if self.essay_model=='gemini-3.1-pro-preview' and output_limit!=8192:
             expected={'model':self.essay_model,'service_tier':self.essay_service_tier,
@@ -67,6 +69,18 @@ class GeminiService:
     def preflight(self, models):
         for model in set(models):
             retry(lambda: self.client.models.get(model=model), self.attempts)
+
+    def preflight_bundle_prompt(self, prompt):
+        """Count complete theory plus both essays before any notebook generation."""
+        schema=AuditedProEssayBundle if self.essay_model=='gemini-3.1-pro-preview' else AuditedFlashEssayBundle
+        count=self.client.models.count_tokens(model=self.essay_model,contents=[
+            prompt,SYSTEM,json.dumps(schema.model_json_schema(),ensure_ascii=False)])
+        if count.total_tokens is None:raise ValueError('Full teacher input token count unavailable')
+        output=getattr(self,'pro_max_output_tokens',8192) if schema is AuditedProEssayBundle else 8192
+        amount=cost_vnd(self.essay_model,math.ceil(count.total_tokens*1.2)+256,
+            output,service_tier=getattr(self,'essay_service_tier','standard'))
+        self.budget.ensure_capacity(amount)
+        self.planned_essay_reserve=amount
 
     def structured(self, model, prompt, schema, attachments=()):
         if getattr(self,'essay_service_tier','standard')=='batch' and schema in (ProEssayBundle,AuditedProEssayBundle):
@@ -131,6 +145,10 @@ class GeminiService:
             types.Part.from_text(text=json.dumps(schema.model_json_schema(),ensure_ascii=False))])
         if counted.total_tokens is None:
             raise ValueError('Could not count input tokens; generation held')
+        if not is_essay and getattr(self,'planned_essay_reserve',0):
+            # A notebook call must leave enough room for the full teacher-text essay plan.
+            self.budget.ensure_capacity(self.planned_essay_reserve+cost_vnd(model,
+                math.ceil(counted.total_tokens*1.2)+256,config.max_output_tokens,service_tier=service_tier))
         self.budget.reserve(call_key,model,counted.total_tokens,config.max_output_tokens,service_tier)
         self.limiter.wait()
         # Exactly one network generation attempt. Timeouts/429/5xx remain reserved, not repaid.

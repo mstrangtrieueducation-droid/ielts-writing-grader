@@ -1,0 +1,157 @@
+{
+  "id": "B14-HOMEWORK-NOTREND",
+  "version": "v09",
+  "lesson": 14,
+  "quality_status": "prepared_requires_live_trial",
+  "essay_fingerprint": "3f5852bb04615a4455bfebb29cec84ee869c7c8c1b004b7fca64e6036a30d770",
+  "notebook_fingerprint": "cf6b8f290461b767c110d02a80d51476b15b64f1eb9f0a9a4391ea8e0bdd7014",
+  "assigned_source_sha256": [
+    "4edb01f61f5e1668639602160238780a610e38c641dbaae391d134302b669046"
+  ],
+  "prompt_files": [
+    {
+      "path": "src/prompts/hybrid-v06.txt",
+      "normalization": "lf",
+      "sha256": "7b2b222237977ceef3c0178aebcf995f9cf34c4f55b59a17afb4a639d8a88055"
+    },
+    {
+      "path": "src/prompts/flash-language-v03.txt",
+      "normalization": "lf",
+      "sha256": "aee98aaaf430c68211983e0451d683fb90847fc447886c0af3fd67d2c3752b31"
+    },
+    {
+      "path": "src/graders/essay_bundle.py",
+      "normalization": "lf",
+      "sha256": "0f83bdbf0ee0dfce0e742df79b9b680661202146fdbc39a32f16ce51206190be"
+    },
+    {
+      "path": "src/graders/quality_contract.py",
+      "normalization": "lf",
+      "sha256": "408cd872a5acf29998d635f6c94fa88c1b0323c9bd1e0a67e58a27f87ac52619"
+    },
+    {
+      "path": "src/graders/essay_grader.py",
+      "normalization": "lf",
+      "sha256": "03bc0974f2605fc19bf26672825aa04d3623049f43a80c3824f3ed49d3022aec"
+    },
+    {
+      "path": "src/prompts/teaching-fairness-v01.txt",
+      "normalization": "lf",
+      "sha256": "783cbf5f676fd674d090fb6b89180e54d352cf40568c013b8f4103049b90beab"
+    },
+    {
+      "path": "src/graders/teaching_fairness.py",
+      "normalization": "lf",
+      "sha256": "feab948c9061eec7fbe0ec2fbfa7868f39d457e31c3cda44ef71fae08ab3577a"
+    },
+    {
+      "path": "prompt-library/B14-HOMEWORK-NOTREND/v08/teacher-knowledge.md",
+      "normalization": "lf",
+      "sha256": "f78b48d458f52d81991dc7e34045f920433f4301dab8e190a4d41634734b06bb"
+    },
+    {
+      "path": "src/teacher_knowledge.py",
+      "normalization": "lf",
+      "sha256": "ef99141b8f33693d4ff2e0878adac08b559cf1058de84ad432a7fe5a12c39157"
+    },
+    {
+      "path": "src/pipeline.py",
+      "normalization": "lf",
+      "sha256": "6317833d185c4b3f604fde1fd806ea53b1a18c7867c9d44e4312c82c94554c69"
+    },
+    {
+      "path": "src/gemini_service.py",
+      "normalization": "lf",
+      "sha256": "901b9622f103c9d2c736d5749f129bc8fe6bf30a81dd4ea66d270987dd267871"
+    },
+    {
+      "path": "src/graders/copy_grader.py",
+      "normalization": "lf",
+      "sha256": "fbd00e5f3f1ad56dfcffd80ef7ded43bdd0e39d816a5fc4a4feccc3ad3e70258"
+    }
+  ],
+  "essay_model_role": "Pro text-only two-essay bundle; no paid review loop",
+  "notebook_model_role": "Flash verified full assigned notebook; reuse only with matching evidence",
+  "authorization": "No class, student, receipt, activation or spending permission is granted by this package.",
+  "quality_note": "Full verbatim teacher text, worked models and translations from all available Writing source lessons through14. Private corpus required, never silently summarised. Notebook Flash gets complete assigned8page teacher PDF, not just checklist. No generation or live acceptance yet.",
+  "teaching_context": "# Kiến thức Cô đã dạy — áp dụng cho hai bài homework buổi 14\n\nGemini trực tiếp chấm bài trong một lần gọi cho hai đề. Đây là kiến thức để vận dụng, không phải hướng dẫn chạy công cụ. Nguồn: nền tảng NO TREND buổi 12, phần đã học của buổi 14 và các đính chính của Cô đến 12/10/2026. Không dùng kiến thức buổi 15–17 như yêu cầu học sinh đã học. Dữ liệu đúng của từng đề nằm trong specification; số liệu của bài giảng minh họa không được chuyển sang bài học sinh.\n\n## Phân tích và bố cục\n\n- Xác định đại lượng, đối tượng, tiêu chí, thời gian trước khi nhận xét. Đề 1 là tỷ lệ sinh viên năm nhất đánh giá tài nguyên từng khóa học là “very good”, không phải điểm chấm cho con số hoặc số tài nguyên. Đề không có năm. Đề 2 đếm trường trong top 200 theo ba ngành tại năm quốc gia năm 2011, không phải tỷ lệ phần trăm.\n- Introduction phải diễn đạt lại đúng nghĩa. Nguồn L14-P0102/P0131 minh họa đổi cấu trúc bằng how much/how; bảng đếm có thể dùng how many. Không ép dùng how nếu cách khác đã tự diễn đạt đúng; không bắt đổi tên quốc gia, môn học hoặc nhãn không có từ thay tự nhiên. Nhắc riêng việc chưa vận dụng cách đổi cấu trúc khi em chỉ chép lại khung câu đề, không gán lỗi ngữ pháp giả.\n- Bốn đoạn: mở bài, overview, hai detail. Overview chọn NHẤT/BÉT và GIỐNG/KHÁC có căn cứ, gồm ngoại lệ hoặc bằng nhau đáng chú ý. L12-P0113 yêu cầu linh hoạt, không ép vào câu đối lập mẫu. Phân biệt so sánh trong cùng một tiêu chí với toàn bảng.\n- Hai detail phải có nguyên tắc nhóm và so sánh trực tiếp, không kể lần lượt tất cả số liệu rời rạc. Giữ cách nhóm hợp lý của học sinh. Bảng khóa học có thể nhóm tiêu chí; bảng đại học có thể nhóm quốc gia rồi so sánh ngành. Không biến một cách chia mẫu thành luật duy nhất.\n- L12-P0136–P0138 yêu cầu liên kết câu 2 với câu 1 và mở detail 2 liên hệ với detail 1. Kiểm tra quan hệ thực: tương phản, giống nhau, nhóm thấp hơn hoặc phần còn lại. Ghi nhận cách nối tương đương đúng; “Regarding…” đứng riêng chưa chứng minh quan hệ nhóm đã rõ. Khung hai câu không phải giới hạn cứng; không phạt bài mạch lạc chỉ vì có thêm câu.\n\n## Ngân hàng cấu trúc phải được áp dụng có ý nghĩa\n\nL12-P0115–P0122 và L14-P0102–P0105 dạy luân phiên cấu trúc so sánh. Ưu tiên cách em đã dùng đúng; bản sửa phải vận dụng các cấu trúc phù hợp thay vì thay toàn bộ thành bài mẫu chung:\n\n- Mở câu bằng số liệu khi phù hợp, đặc biệt đầu detail; theo sau là thông tin đo lường đầy đủ. Bị động chỉ dùng khi hoạt động và chủ ngữ phù hợp, không tạo câu “figures were awarded scores”.\n- “[A] was higher than that of [B], with the respective figures being […]”; danh từ số nhiều dùng those. Cụm with … being là thành phần phụ hợp lệ khi câu đã có động từ chính.\n- “[…], compared with […]”; “while/whereas […]”; “exceeding/surpassing […] by […]”; “double/almost triple the figure for […]”. Kiểm tra hai vế cùng đại lượng, đơn vị và đối tượng đo.\n- “[…] were identical, at […] each”; “no more than […]”; “ranging/varying between […]”. Khoảng giữa các nhóm và tỷ số tĩnh không phải tăng giảm theo thời gian. Không cấm từ bằng danh sách máy móc.\n- That/those/the figure(s), respectively/in that order, both/each, this was also the case, the opposite và did the same phải có đối tượng thay thế rõ, đúng thứ tự và đúng phạm vi. Soát cả câu trước và câu sau; không buộc nhắc lại hạng mục đã được nêu rõ.\n- Trừ hai tỷ lệ dùng percentage points; tỷ số dùng gấp/nhân đúng phép tính. L12 có ví dụ phần trăm cộng sai mẫu số và cách nói “gap of …%”: không sao chép lỗi nguồn, không quy lỗi cho em như thể em tự nghĩ ra. Không cộng ba ngành để suy ra số trường riêng biệt; tổng của một ngành qua năm quốc gia chỉ được dùng trong phạm vi đã xác minh.\n\n## Phạm vi và sự công bằng\n\nL14-P0060 quy định Other sports là nhóm còn lại, đặt cuối detail và không làm ý chính overview của biểu đồ thể thao. Hai đề homework hiện tại không phải biểu đồ ấy: Other resources là hạng mục của bảng đánh giá, không tự buộc chuyển cuối chỉ vì có chữ Other. Other workers là nhóm người so sánh, cũng không phải hạng mục Other sports.\n\nUS/UK/US dollars và các dạng tên thông dụng rõ nghĩa được chấp nhận; chính mẫu L14-P0103–P0105 dùng chúng. Phân biệt với contractions hoặc lối nhắn tin. Đính chính này thay quy tắc cũ cấm mọi dạng viết tắt. Biology/Medicine/Psychology là nhãn môn học; không đánh dấu lỗi chỉ để đổi nhãn hoặc ép viết lại cách gọi vốn đúng.\n\nKiểm tra nghĩa cả cụm: người tham gia/đánh giá khác với tỷ lệ; nổi tiếng khác với tỷ lệ tham gia; phần trăm không tự thấy hấp dẫn. Sửa diễn đạt từng từ dịch thô khi có bằng chứng, không đoán học sinh dùng phần mềm. Mỗi mệnh đề có thể có nhiều lỗi độc lập; phải giải thích đủ, không chỉ sửa âm thầm trong bài mẫu.\n\n## Cách trả nhận xét\n\nNghiêm khắc nhưng có căn cứ, xưng Cô–em, dùng “chủ ngữ”, từ/câu thật và cách sửa cụ thể. Phân biệt lỗi thực tế, yêu cầu vận dụng còn thiếu và gợi ý tùy chọn. Không khen khuôn sáo; không chèn lời dẫn về model, prompt hoặc kiểm tra kỹ thuật. Nhận xét chung ngắn nhưng chú thích phải đủ lỗi. Trong taught_application_vi, chỉ rõ cấu trúc/cách nhóm em đã vận dụng hoặc 1–2 chỗ cần vận dụng lại, và bảo đảm bản sửa thực hiện điều đã nhắc. Không áp mọi mẫu như bảng đếm bắt buộc. Đối chiếu bài gốc → chú thích → cách sửa → toàn bài ngay trong cùng lần trả lời; không thêm lượt API kiểm toán.\n",
+  "knowledge_provenance": [
+    {
+      "name": "writing-foundations.md",
+      "sha256": "7c6d692fe41fdf63287bcf7227585946971177e9c9ddcb06eb3c5cd9fafc455c"
+    },
+    {
+      "name": "task1-no-trend-foundations.md",
+      "sha256": "59efb6838ff4cbacf56ec533529dbf04b5288837257fa4d6aa91fd4040a63367"
+    },
+    {
+      "name": "feedback-language.md",
+      "sha256": "57aa7ad59373ae0da2c1d15a185183b6ca9c59c4d82ee85c661e974a868ed02a"
+    },
+    {
+      "name": "lesson-12-doc1-reference.md",
+      "sha256": "468b0d8f66f44092608e1a061ba392062bf9ea5d82355fd421fb72e7fb999103"
+    },
+    {
+      "name": "lesson-14-doc1-reference.md",
+      "sha256": "08a704454f04c1c320a6e17692fa815db9c0c7a07625be77a58f49c96b1bd13d"
+    }
+  ],
+  "full_teacher_sources": {
+    "filename": "teacher-full-task1-through14-ebae9d1534e44cff.json",
+    "through_lesson": 14,
+    "sha256": "ebae9d1534e44cff8bdbeb9b61aca8f155596177480da17011c6493ae6ffaa70",
+    "documents": [
+      {
+        "id": "L05-DOC1",
+        "lesson": 5,
+        "sha256": "83e6735363d8c2317e36cc1568efc99e0563f25d2a8fcfd953ae91b542b71de3"
+      },
+      {
+        "id": "L06-DOC1",
+        "lesson": 6,
+        "sha256": "ed56dba3ed180131c4febd10d858fcb5c7a34990b77ec4601c270c781cc13a79"
+      },
+      {
+        "id": "L07-DOC1",
+        "lesson": 7,
+        "sha256": "5bfd3861682b1a3467fec3b8aba67a8b212816da22be68cab0dec7d0daf9554d"
+      },
+      {
+        "id": "L08-DOC1",
+        "lesson": 8,
+        "sha256": "b0ded855b5e28aadba3074e66ae977d201953952b3687b4ae1f00759bf00cd93"
+      },
+      {
+        "id": "L09-DOC1",
+        "lesson": 9,
+        "sha256": "2ddf526fdda34fa62d9853a9ffc56037a29e8c8e2d0c7c5136e3090722958f4d"
+      },
+      {
+        "id": "L10-DOC1",
+        "lesson": 10,
+        "sha256": "1941da1ecabcfe6d831773226a372f7b52c73b055ea6ca83b5378045e8dc63d1"
+      },
+      {
+        "id": "L12-DOC1",
+        "lesson": 12,
+        "sha256": "468b0d8f66f44092608e1a061ba392062bf9ea5d82355fd421fb72e7fb999103"
+      },
+      {
+        "id": "L13-DOC1",
+        "lesson": 13,
+        "sha256": "571562194163e603e10e463268809db4740ab12c9b022c9f68d0b6a92e40769a"
+      },
+      {
+        "id": "L14-t.bzs9osl0kypm",
+        "lesson": 14,
+        "sha256": "3ba690d9a8e6d2a979eefa5a9bf36c422c3c8cb83c9f1735a82eb0f37636d0c4"
+      },
+      {
+        "id": "L14-t.0",
+        "lesson": 14,
+        "sha256": "139f30c61fcba08350a68c0d823981c01776611e8c7536040ce79faf272e45f9"
+      }
+    ]
+  }
+}
