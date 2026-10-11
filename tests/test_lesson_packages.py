@@ -65,3 +65,25 @@ def test_new_draft_is_not_live_approval_and_text_hash_is_portable(binding,tmp_pa
     assert module.resolve_package(binding.essays)['quality_status']=='prepared_requires_live_trial'
     source.write_bytes(b'Changed\nSecond\n')
     with pytest.raises(ValueError,match='prompt changed'):module.resolve_package(binding.essays)
+
+def test_finite_trial_binds_exact_package_student_and_authority(binding,tmp_path,monkeypatch):
+    import copy
+    root=library(binding,tmp_path,monkeypatch)
+    p=json.loads((root/'manifest.json').read_text());p['quality_status']='prepared_requires_live_trial'
+    (root/'manifest.json').write_text(json.dumps(p))
+    (root/'catalog.json').write_text(json.dumps({'packages':[{'manifest':'manifest.json','manifest_sha256':module.fingerprint(p)}]}))
+    binding=binding.model_copy(update={'regrade_authorizations':{'S1':'Teacher approved one bounded trial'}})
+    authority=binding.regrade_authorizations['S1']
+    state={'job_id':'new-job','student':{'id':'S1'},'pilot_review':{'status':'awaiting_review'},
+        'cost_exception':{'job_id':'new-job','student_id':'S1','authority':authority,
+            'maximum_generation_calls':1,'generation_limits':{'gemini-3.1-pro-preview':1}},
+        'lesson_package_trial':{'package_id':p['id'],'package_version':p['version'],
+            'manifest_sha256':module.fingerprint(p),'job_id':'new-job','student_id':'S1','authority':authority}}
+    result=module.verify_package_sources(binding,{'source':'verifiedhash'},trial_state=state)
+    assert result['quality_status']=='prepared_requires_live_trial'
+    for key,value in [('student_id','S2'),('package_version','newer'),('manifest_sha256','different')]:
+        altered=copy.deepcopy(state);altered['lesson_package_trial'][key]=value
+        with pytest.raises(ValueError,match='separately authorized'):
+            module.verify_package_sources(binding,{'source':'verifiedhash'},trial_state=altered)
+    with pytest.raises(ValueError,match='source changed'):
+        module.verify_package_sources(binding,{'source':'changed'},trial_state=state)

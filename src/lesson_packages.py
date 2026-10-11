@@ -44,13 +44,26 @@ def resolve_package(specs,root=None):
     if len(matches)>1:raise ValueError('Ambiguous active lesson package')
     return matches[0] if matches else None
 
-def verify_package_sources(binding,source_checksums):
+def verify_package_sources(binding,source_checksums,trial_state=None):
     package=resolve_package(binding.essays)
     if package is None:return None
     if package['quality_status']=='live_quality_rejected':
         raise ValueError('Lesson package failed live quality review; prepare a new audited version before generation')
     if package['quality_status']=='prepared_requires_live_trial':
-        raise ValueError('Prepared lesson package requires a separately authorized live quality trial before routine generation')
+        state=trial_state or {}
+        sid=state.get('student',{}).get('id')
+        authority=binding.regrade_authorizations.get(sid,'')
+        trial=state.get('lesson_package_trial',{})
+        cost=state.get('cost_exception',{})
+        if (not authority or trial!={'package_id':package['id'],'package_version':package['version'],
+            'manifest_sha256':fingerprint(package),'job_id':state.get('job_id'),
+            'student_id':sid,'authority':authority}
+            or not state.get('job_id') or cost.get('job_id')!=state['job_id']
+            or cost.get('student_id')!=sid or cost.get('authority')!=authority
+            or cost.get('maximum_generation_calls')!=1
+            or cost.get('generation_limits')!={'gemini-3.1-pro-preview':1}
+            or state.get('pilot_review',{}).get('status')!='awaiting_review'):
+            raise ValueError('Prepared lesson package requires a separately authorized live quality trial before routine generation')
     if binding.lesson!=package['lesson'] or notebook_fingerprint(binding)!=package['notebook_fingerprint']:
         raise ValueError('Lesson package copying requirements differ; verify a new version')
     if sorted(source_checksums.values())!=package['assigned_source_sha256']:

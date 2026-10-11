@@ -138,7 +138,7 @@ class Pipeline:
         references=self.files(binding.source_file_ids)
         checksums={fid:hashlib.sha256(data).hexdigest() for fid,data,_ in references}
         from .lesson_packages import verify_package_sources
-        package=verify_package_sources(binding,checksums)
+        package=verify_package_sources(binding,checksums,trial_state=state)
         if package:state['lesson_package']=package
         if state.get('source_checksums') and state['source_checksums']!=checksums:
             raise ValueError('Assigned sources changed after prompt freeze; explicit audited new version required')
