@@ -1,6 +1,11 @@
 import copy
 import hashlib
 import pytest
+
+@pytest.fixture(autouse=True)
+def isolated_delivery_environment(monkeypatch):
+    # Publication tests simulate the no-generation delivery job, even in a paid-pilot workflow.
+    monkeypatch.setenv('GEMINI_GENERATION_ENABLED','false')
 from conftest import essay,notebook
 from test_pipeline import components
 from src.pilot import payload_digest
