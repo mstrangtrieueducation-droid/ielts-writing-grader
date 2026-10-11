@@ -7,7 +7,7 @@ on:
       mode:
         description: 'Validate access first, or run grading'
         type: choice
-        options: [preflight, pilot, deliver-pilot, grade]
+        options: [preflight, pilot, collect-pro-batch, deliver-pilot, grade]
         default: preflight
       authorized_flash_trial:
         description: 'Explicitly authorized bounded Flash pilot; leaves scheduled generation off'
@@ -19,6 +19,10 @@ on:
         default: false
       authorized_flash_bundle_trial:
         description: 'Approved one-call Flash two-essay pilot; keeps scheduled generation OFF'
+        type: boolean
+        default: false
+      authorized_pro_batch_trial:
+        description: 'New explicit Pro Batch pilot approval; never retries a saved submission'
         type: boolean
         default: false
       hybrid_student_budget_vnd:
@@ -41,7 +45,8 @@ jobs:
     timeout-minutes: 120
     env:
       GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-      GEMINI_GENERATION_ENABLED: ${{ inputs.mode == 'pilot' && (inputs.authorized_flash_trial || inputs.authorized_hybrid_trial || inputs.authorized_flash_bundle_trial) && 'true' || vars.GEMINI_GENERATION_ENABLED }}
+      GEMINI_GENERATION_ENABLED: ${{ inputs.mode == 'collect-pro-batch' && 'false' || inputs.mode == 'pilot' && (inputs.authorized_flash_trial || inputs.authorized_hybrid_trial || inputs.authorized_flash_bundle_trial || inputs.authorized_pro_batch_trial) && 'true' || vars.GEMINI_GENERATION_ENABLED }}
+      PILOT_BATCH_SUBMIT_AUTHORIZED: ${{ inputs.mode == 'pilot' && inputs.authorized_pro_batch_trial && 'true' || 'false' }}
       GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
       GOOGLE_STATE_OAUTH_JSON: ${{ secrets.GOOGLE_STATE_OAUTH_JSON }}
       DASHBOARD_MASTER_KEY: ${{ secrets.DASHBOARD_MASTER_KEY }}
@@ -51,10 +56,10 @@ jobs:
       GUIDELINES_SPREADSHEET_ID: ${{ vars.GUIDELINES_SPREADSHEET_ID }}
       GEMINI_NOTEBOOK_MODEL: ${{ vars.GEMINI_NOTEBOOK_MODEL }}
       # The earlier Flash-only trial authorization must never authorize a Pro call.
-      GEMINI_ESSAY_MODEL: ${{ inputs.mode == 'pilot' && (inputs.authorized_flash_trial || inputs.authorized_flash_bundle_trial) && 'gemini-3.8-flash' || inputs.mode == 'pilot' && inputs.authorized_hybrid_trial && 'gemini-3.1-pro-preview' || vars.GEMINI_ESSAY_MODEL }}
+      GEMINI_ESSAY_MODEL: ${{ inputs.mode == 'pilot' && (inputs.authorized_flash_trial || inputs.authorized_flash_bundle_trial) && 'gemini-3.8-flash' || (inputs.mode == 'collect-pro-batch' || inputs.mode == 'pilot' && (inputs.authorized_hybrid_trial || inputs.authorized_pro_batch_trial)) && 'gemini-3.1-pro-preview' || vars.GEMINI_ESSAY_MODEL }}
       GEMINI_ESSAY_BUNDLE: ${{ inputs.mode == 'pilot' && inputs.authorized_flash_bundle_trial && 'true' || vars.GEMINI_ESSAY_BUNDLE || 'false' }}
-      GEMINI_ESSAY_SERVICE_TIER: ${{ inputs.mode == 'pilot' && inputs.authorized_flash_bundle_trial && 'standard' || inputs.mode == 'pilot' && inputs.authorized_hybrid_trial && !inputs.authorized_flash_trial && 'flex' || vars.GEMINI_ESSAY_SERVICE_TIER || 'standard' }}
-      GEMINI_STUDENT_BUDGET_VND: ${{ inputs.mode == 'pilot' && (inputs.authorized_hybrid_trial || inputs.authorized_flash_bundle_trial) && !inputs.authorized_flash_trial && inputs.hybrid_student_budget_vnd || vars.GEMINI_STUDENT_BUDGET_VND || '1000' }}
+      GEMINI_ESSAY_SERVICE_TIER: ${{ (inputs.mode == 'collect-pro-batch' || inputs.mode == 'pilot' && inputs.authorized_pro_batch_trial) && 'batch' || inputs.mode == 'pilot' && inputs.authorized_flash_bundle_trial && 'standard' || inputs.mode == 'pilot' && inputs.authorized_hybrid_trial && !inputs.authorized_flash_trial && 'flex' || vars.GEMINI_ESSAY_SERVICE_TIER || 'standard' }}
+      GEMINI_STUDENT_BUDGET_VND: ${{ (inputs.mode == 'collect-pro-batch' || inputs.mode == 'pilot' && (inputs.authorized_hybrid_trial || inputs.authorized_flash_bundle_trial || inputs.authorized_pro_batch_trial)) && !inputs.authorized_flash_trial && inputs.hybrid_student_budget_vnd || vars.GEMINI_STUDENT_BUDGET_VND || '1000' }}
       DASHBOARD_BASE_URL: ${{ vars.DASHBOARD_BASE_URL }}
       CLASS_SHEET_MAP_JSON: ${{ secrets.CLASS_SHEET_MAP_JSON }}
       PILOT_SELECTION_JSON: ${{ secrets.PILOT_SELECTION_JSON }}
@@ -87,6 +92,9 @@ jobs:
       - name: Grade selected real pilot privately
         if: github.event_name == 'workflow_dispatch' && inputs.mode == 'pilot'
         run: python -m src.main --pilot
+      - name: Collect the saved Pro Batch pilot without generation
+        if: github.event_name == 'workflow_dispatch' && inputs.mode == 'collect-pro-batch'
+        run: python -m src.main --collect-pro-batch
       - name: Deliver approved saved pilot without generation
         if: github.event_name == 'workflow_dispatch' && inputs.mode == 'deliver-pilot'
         run: python -m src.main --deliver-pilot

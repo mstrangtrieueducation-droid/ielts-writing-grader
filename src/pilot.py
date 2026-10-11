@@ -5,6 +5,7 @@ from .schemas import Binding
 from .delivery import deliver
 from .policy import eligible_binding,receipt_allowed
 from .parsers import parse_receipt
+from .pro_batch import BatchPending
 
 def selected_binding(bindings, selection):
     if set(selection) != {'class_name','task_code','student_ids'}:
@@ -32,7 +33,7 @@ def run_pilot(pipeline, bindings, selection):
     selected={s['id']:(s,source) for s,source in sources if s['id'] in wanted}
     if set(selected)!=wanted:
         raise ValueError('Selected pilot student has no original submission')
-    report={'staged':0,'essays':0,'notebook_failed':0,'live_feedback_writes':0,'job_ids':[]}
+    report={'staged':0,'pending':0,'essays':0,'notebook_failed':0,'live_feedback_writes':0,'job_ids':[]}
     for sid in selection['student_ids']:
         student,source=selected[sid]
         if source.get('missing') or not receipt_allowed(binding,parse_receipt(source['received_at'])):
@@ -46,11 +47,21 @@ def run_pilot(pipeline, bindings, selection):
         if not existing and not binding.regrade_authorizations.get(sid) and pipeline.sheets.has_prior_grading(spreadsheet,binding,student):
             raise ValueError('Previously returned feedback is preserved')
         state=pipeline.store.begin(binding,student,source)
+        if state['source']!=source or Binding.model_validate(state['binding'])!=binding:
+            raise ValueError('Frozen pilot source or binding changed; preserve saved attempt')
+        if getattr(pipeline.settings,'essay_service_tier','standard')=='batch' and not state.get('notebook'):
+            raise ValueError('Pro Batch pilot must reuse an already verified notebook')
         # A failed/incomplete pilot must also remain outside automatic delivery.
         state['pilot_review']={'status':'awaiting_review','delivery_authorized':False}
         pipeline.store.save(state)
         try:
             pipeline.grade(state,binding)
+        except BatchPending:
+            state.pop('last_error',None)
+            pipeline.store.save(state)
+            report['pending']+=1
+            report['job_ids'].append(jid)
+            continue
         except Exception as exc:
             state['last_error']={'type':type(exc).__name__,
                 'reason':str(exc) if isinstance(exc,ValueError) else 'External grading operation failed; inspect the private API audit and resume saved phase'}
@@ -65,6 +76,49 @@ def run_pilot(pipeline, bindings, selection):
         report['job_ids'].append(jid)
     pipeline.store.drive.write_json(pipeline.store.folder,'pilot-'+binding.class_name.replace(' ','-')+'-'+binding.task_code+'.json',report)
     return report
+
+def collect_batch_pilot(pipeline,bindings,selection):
+    """Poll only an already submitted pilot, using frozen text and cached notebook.
+
+    No Form/PDF capture, notebook model, new Batch create or automatic publication.
+    Dedicated delivery subsequently revalidates all live source/receipt bindings.
+    """
+    import os
+    from .graders.essay_bundle import grade_bundle
+    from .schemas import NotebookResult
+    from .policy import notebook_state
+    if os.getenv('GEMINI_GENERATION_ENABLED')=='true' or os.getenv('PILOT_BATCH_SUBMIT_AUTHORIZED')=='true':
+        raise ValueError('Batch collection requires paid generation OFF')
+    if pipeline.settings.essay_service_tier!='batch':
+        raise ValueError('Collection requires explicit Pro Batch transport')
+    binding=selected_binding(bindings,selection)
+    matches=[s for s in pipeline.store.jobs.values() if s['binding']==binding.model_dump(mode='json')
+        and s['student']['id']==selection['student_ids'][0]]
+    if len(matches)!=1:
+        raise ValueError('No unique frozen Batch pilot for selected binding')
+    state=matches[0]
+    review=state.get('pilot_review',{})
+    if review.get('status')!='awaiting_review' or state.get('payload') or state['phase']=='complete':
+        raise ValueError('Collection cannot reopen completed/rejected pilots')
+    work=state.get('bundle_work',{})
+    if work.get('transport')!='batch' or work.get('status') not in ('queued','received','validated'):
+        raise ValueError('Collection requires an existing saved Batch attempt')
+    if pipeline.store.locked_notebook(binding,state['student']) or not state.get('notebook') or notebook_state(NotebookResult.model_validate(state['notebook']))!='pass':
+        raise ValueError('Collection requires previously verified passed notebook')
+    pipeline.ai.bind_budget(pipeline.store,binding,state)
+    def checkpoint(saved):
+        state['bundle_work']=saved;pipeline.store.save(state)
+    try:
+        results=grade_bundle(pipeline.ai,pipeline.settings,binding.essays,state['source']['essay_texts'],checkpoint,work)
+    except BatchPending:
+        return {'pending':1,'staged':0,'live_feedback_writes':0,'generation_calls':0}
+    state['essay_results']={str(r.exercise):r.model_dump(mode='json') for r in results}
+    day=parse_receipt(state['source']['received_at']).strftime('%d/%m/%Y')
+    state['payload']=pipeline.payload(binding,state['student'],state['source'],'graded',
+        f'Đã ghi nhận vở nộp ngày {day} — Đạt yêu cầu.',[r.model_dump(mode='json') for r in results])
+    state.pop('last_error',None)
+    pipeline.store.save(state)
+    return {'pending':0,'staged':1,'essays':len(results),'live_feedback_writes':0,'generation_calls':0}
 
 def payload_digest(payload):
     return digest(json.dumps(payload,ensure_ascii=False,sort_keys=True))

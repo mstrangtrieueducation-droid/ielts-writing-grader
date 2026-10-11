@@ -70,8 +70,8 @@ class Settings:
             essay_bundle=os.getenv('GEMINI_ESSAY_BUNDLE','false')=='true')
         if settings.student_budget_vnd<1:
             raise ValueError('Student budget must be positive')
-        if settings.essay_service_tier not in ('standard','flex'):
+        if settings.essay_service_tier not in ('standard','flex','batch'):
             raise ValueError('Unverified service tier; generation held')
-        if settings.essay_service_tier=='flex' and settings.essay_model!='gemini-3.1-pro-preview':
-            raise ValueError('Flex configuration is scoped to the explicit Pro homework bundle')
+        if settings.essay_service_tier in ('flex','batch') and settings.essay_model!='gemini-3.1-pro-preview':
+            raise ValueError('Discounted configuration is scoped to the explicit Pro homework bundle')
         return settings

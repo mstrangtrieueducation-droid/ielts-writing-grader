@@ -1,7 +1,7 @@
 """Conservative application budget, durable under the serialized Actions writer.
 
 This is not a Google billing cap. Unknown/in-flight calls keep their full reserve.
-Prices are a dated Standard/Flex snapshot; no free-tier/cache discount is assumed.
+Prices are a dated Standard/Flex/Batch snapshot; no free-tier/cache discount is assumed.
 """
 import json
 import math
@@ -20,9 +20,9 @@ def cost_vnd(model, input_tokens, output_tokens, fx=USD_VND, service_tier='stand
     if min(input_tokens,output_tokens,fx) < 0:
         raise ValueError('Invalid cost inputs')
     price_in,price_out=PRICES[model]
-    if service_tier not in ('standard','flex'):
+    if service_tier not in ('standard','flex','batch'):
         raise ValueError('Service tier has no verified budget price; generation held')
-    if service_tier=='flex':
+    if service_tier in ('flex','batch'):
         price_in/=2;price_out/=2
     return (input_tokens*price_in+output_tokens*price_out)*fx/1_000_000
 
@@ -97,7 +97,7 @@ class ClassBudget:
         call.update(status='received',response_text=response_text,usage_metadata=usage)
         requested=call.get('service_tier','standard')
         call['actual_service_tier']=actual_service_tier
-        if requested=='flex' and actual_service_tier!='flex':
+        if requested in ('flex','batch') and actual_service_tier!=requested:
             # Do not report the discounted price without response evidence.
             call['tier_unverified']=True
             self.data['limit_vnd']=0

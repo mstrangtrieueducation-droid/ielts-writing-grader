@@ -5,6 +5,7 @@ No PDF/image transfer, paid reviewer, regeneration or manual feedback patching.
 import json
 from ..schemas import ProEssayBundle,FlashEssayBundle,ThoroughFlashResult,ThoroughFlashTask1Result
 from ..parsers import word_count,essay_paragraphs,digest
+from ..pro_batch import BatchPending
 from .essay_grader import RUBRIC,LANGUAGE_AUDIT,NUMERICAL_AUDIT,language_units,validate_essay
 
 PROMPT_VERSION='hybrid-two-essays-v02-static-and-clause-review'
@@ -74,15 +75,29 @@ def grade_bundle(ai, settings, specs, texts, checkpoint, pending=None):
             raise ValueError('Saved bundle model differs; preserve the original attempt')
         if pending.get('source_digest')!=source_digest:
             raise ValueError('Saved bundle differs from frozen essays/specifications')
-        if pending.get('status') not in ('received','validated'):
+        if pending.get('status')=='queued' and pending.get('transport')=='batch' and getattr(settings,'essay_service_tier','standard')=='batch':
+            try:
+                bundle=ai.structured(settings.essay_model,prompt,schema,())
+            except BatchPending:
+                raise
+            except Exception:
+                checkpoint({**pending,'status':'held'})
+                raise
+            pending.update(status='received',result=bundle.model_dump(mode='json'))
+            checkpoint(pending.copy())
+        elif pending.get('status') not in ('received','validated'):
             raise ValueError('Saved bundle attempt is unresolved; no automatic paid regeneration')
-        bundle=schema.model_validate(pending['result'])
+        else:
+            bundle=schema.model_validate(pending['result'])
     else:
         pending={'source_digest':source_digest,'status':'reserved','mode':PROMPT_VERSION,
             'model':settings.essay_model,'prompt_sha256':digest(prompt)}
         checkpoint(pending.copy())
         try:
             bundle=ai.structured(settings.essay_model,prompt,schema,())
+        except BatchPending:
+            checkpoint({**pending,'status':'queued','transport':'batch'})
+            raise
         except Exception:
             checkpoint({**pending,'status':'held'})
             raise

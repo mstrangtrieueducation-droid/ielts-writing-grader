@@ -38,6 +38,7 @@ class GeminiService:
         self.student_limit=settings.student_budget_vnd
         self.essay_service_tier=settings.essay_service_tier
         self.essay_bundle=getattr(settings,'essay_bundle',False)
+        self.trusted_system=SYSTEM
 
     def bind_budget(self, store, binding, state):
         self.budget=ClassBudget(store,binding,state,
@@ -58,6 +59,11 @@ class GeminiService:
             retry(lambda: self.client.models.get(model=model), self.attempts)
 
     def structured(self, model, prompt, schema, attachments=()):
+        if getattr(self,'essay_service_tier','standard')=='batch' and schema is ProEssayBundle:
+            if model!='gemini-3.1-pro-preview' or self.essay_model!=model or attachments:
+                raise ValueError('Pro Batch is restricted to the text-only two-essay schema')
+            from .pro_batch import request
+            return request(self,prompt,schema)
         if os.getenv('GEMINI_GENERATION_ENABLED')!='true':
             raise ValueError('Paid Gemini generation is disabled; no grading API request sent')
         pro_bundle=schema is ProEssayBundle

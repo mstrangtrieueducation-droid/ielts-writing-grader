@@ -2,6 +2,8 @@
 
 Mã nguồn chấm vở, sổ từ vựng, bài viết homework và PDF kiểm tra, với checkpoint riêng trên Drive, dashboard mã hóa và ghi nhận xét chính xác vào Toàn diện. Đây là một dự án triển khai riêng; tạo thư mục này không tự thay thế dashboard, trigger hoặc heartbeat đang vận hành.
 
+Lựa chọn mới nhất 11/10/2026: giữ **Flash cho đầu vào/vở**, **Pro cho hai bài viết gõ của một em trong một lượt**. Hướng Pro Batch đã có mã và kiểm thử phục hồi, nhưng chưa gửi lượt trả phí hoặc nghiệm thu bản chữa thật. Xem [quy trình Pro Batch](docs/pro-batch-pilot.md). Các đoạn Flash-only và Flex phía dưới là lịch sử phương án; không cho phép tự chạy lại các pilot đã bị từ chối. Hai cờ chạy tự động vẫn OFF, trần thường xuyên 1.000đ/em và 14.900đ/lớp/buổi giữ nguyên. Batch giảm giá so với Standard, không bảo đảm đủ chất lượng/hoàn thành trong trần này hoặc đúng 24 giờ.
+
 ## Những điểm đã sửa so với bản directive
 
 - Gemini 1.5 đã ngừng phục vụ. Hai model được đặt bằng biến cấu hình và kiểm tra qua API trước khi chạy, không âm thầm đổi model khi lỗi. Danh mục hiện hành: https://ai.google.dev/gemini-api/docs/models ; lịch ngừng model: https://ai.google.dev/gemini-api/docs/deprecations .
