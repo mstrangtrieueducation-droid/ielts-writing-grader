@@ -8,7 +8,8 @@
     root.replaceChildren();
     for (const payload of Object.values(data.assignments)) {
       const card = el('article'); card.dataset.taskCode = payload.task_code;
-      card.append(el('h2', payload.task_code), el('p', `${payload.class_name} · ${payload.student_name} · Buổi ${payload.lesson}`));
+      const title = {homework:'Nhận xét bài tập về nhà',assessment:'Nhận xét bài kiểm tra',notebook:'Nhận xét vở chép',vocabulary:'Nhận xét sổ từ vựng'}[payload.assignment_type] || 'Nhận xét bài tập';
+      card.append(el('h2', title), el('p', `${payload.class_name} · ${payload.student_name} · Buổi ${payload.lesson}`));
       if (payload.received_display) card.append(el('p', `Thời gian nhận: ${payload.received_display}`));
       if (payload.received_display && payload.state !== 'too_late') card.append(el('p', payload.submitted_late ? 'Đã nộp muộn so với hạn bài tập' : 'Đã nộp'));
       if (payload.warning) card.append(el('p', payload.warning, 'warning'));

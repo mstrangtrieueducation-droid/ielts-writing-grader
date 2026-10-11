@@ -51,6 +51,8 @@ def main():
                     assert page.locator('[data-essay]').count()==(1 if state=='graded' else 0)
                     assert payload['warning'] in page.inner_text('#results')
                     assert page.locator('#results a').count()==len(payload['notebook_links'])
+                    assert page.get_by_role('heading',name='Nhận xét bài tập về nhà',exact=True).count()==1
+                    assert payload['task_code'] not in page.inner_text('#results')
                     if state=='graded':
                         page.locator('summary').click()
                         assert page.locator('.yellow').count()==1 and page.locator('.blue').count()==1 and page.locator('.green').count()==1

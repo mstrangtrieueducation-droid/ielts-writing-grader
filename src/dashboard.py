@@ -100,7 +100,7 @@ class Dashboard:
             page=browser.new_page()
             page.goto(self.link(payload['class_name'],payload['student_id']),wait_until='networkidle',timeout=60000)
             page.wait_for_selector('[data-ready="true"]',timeout=20000)
-            card=page.get_by_role('heading',name=payload['task_code'],exact=True).locator('..')
+            card=page.locator(f'article[data-task-code="{payload["task_code"]}"]')
             if card.count()!=1:
                 raise RuntimeError('Actual dashboard assignment card absent or ambiguous')
             if card.locator('[data-essay]').count()!=len(payload.get('essays',[])):
