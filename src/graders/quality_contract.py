@@ -64,7 +64,7 @@ Evidence arrays are private checks, never system narration in student-facing fee
 '''
 
 NUMBER=r'[-+]?\d+(?:,\d{3})*(?:\.\d+)?'
-EXTREME=re.compile(r'\b(?:highest|lowest|largest|smallest|greatest|least|most\s+(?:favou?red|popular|appealing))\b',re.I)
+EXTREME=re.compile(r'\b(?:highest|lowest|largest|smallest|greatest|least|ranked\s+first|most\s+(?:highly\s+rated|favou?red|popular|appealing))\b',re.I)
 
 def numbers(text):
     if re.search(r'\d,\d{1,2}(?!\d)',text):
@@ -155,13 +155,53 @@ def generated_texts(item):
     return out
 
 def mentions(text,label):
+    if label.casefold()=='uk' and re.search(r'\bUnited Kingdom\b',text,re.I):return True
     words=re.findall(r'\w+',label.casefold())
     # Ordinary inflections do not change a table category (Tutor/tutors, print/printed).
     def pattern(word):
         if word=='print':return r'print(?:ed)?'
+        if word=='tutor':return r'tutor(?:s|ing)?'
         if word.endswith('s') and len(word)>3:return re.escape(word[:-1])+r's?'
         return re.escape(word)+r's?'
     return bool(words) and all(re.search(r'\b'+pattern(w)+r'\b',text,re.I) for w in words)
+
+def claim_context(text,quote):
+    """Only the containing clause can supply context; never borrow another topic.
+
+    A quote crossing a clause boundary already carries its own wider context.
+    Duplicated/ambiguous occurrences get no inferred context.
+    """
+    if text.count(quote)!=1:return quote
+    clauses=re.split(r'(?<=[.!?])\s+|\n|\b(?:while|whereas|however)\b',text,flags=re.I)
+    found=[c for c in clauses if quote in c]
+    return found[0] if len(found)==1 else quote
+
+def shared_rows(context,value,matrix):
+    """Separate explicit respectively pairs from a shared value/bound.
+
+    Only a single two-row pair and at most one named category are resolved.
+    Multiple categories may mean a subject-wise list instead; do not guess.
+    """
+    named=named_rows(context,matrix)
+    pairs=[(a,b) for a,b in zip(named,named[1:]) if re.search(
+        r'\b'+re.escape(a)+r'\s*(?:,\s*)?(?:and|&)\s+'+re.escape(b)+r'\b',context,re.I)]
+    if len(pairs)!=1:return set(r for pair in pairs for r in pair)
+    match=re.search('('+NUMBER+r')\s*%?\s*(?:,\s*|and\s+)('+NUMBER+r')\s*%?\s*,?\s*respectively\b',context,re.I)
+    if match and len([c for c in matrix['columns'] if mentions(context,c)])<=1:
+        vals=[float(match.group(i).replace(',','')) for i in (1,2)]
+        if value in vals:return {pairs[0][i] for i,v in enumerate(vals) if v==value}
+    return set(pairs[0])
+
+def strict_boundary_facts(original,matrix):
+    """Give the model computed equality facts, not inferred student verdicts."""
+    if matrix is None:return []
+    output=[]
+    for value in sorted(set(numbers(original))):
+        if quoted_operator(original,value) not in ('gt','lt'):continue
+        equal={cid:c for cid,c in matrix['cells'].items() if c['value']==value}
+        if equal:output.append({'threshold':value,'operator':quoted_operator(original,value),
+            'equal_cells':equal,'rule':'Equality does not satisfy a strict bound. Match the actual named groups/category before deciding which original claim is wrong.'})
+    return output
 
 def validate_comparisons(item,original,matrix):
     if matrix is None:
@@ -186,13 +226,17 @@ def validate_comparisons(item,original,matrix):
             else:
                 labels=matrix['rows' if check.scope=='row' else 'columns']
                 if check.scope_key not in labels:raise ValueError('Unknown comparison scope')
-                if not check.scope_quote or check.scope_quote not in check.quote or not mentions(check.scope_quote,check.scope_key) or not re.search(r'\b(?:for|in|among|within|across)\b',check.scope_quote,re.I):
+                context=claim_context(text,check.quote)
+                scope_words=r'\b(?:for|in|among|within|across|regarding)\b'
+                if check.scope=='row':scope_words=r'\b(?:for|in|among|within|across|regarding|of)\b'
+                if not check.scope_quote or check.scope_quote not in context or not mentions(check.scope_quote,check.scope_key) or not re.search(scope_words,check.scope_quote,re.I):
                     raise ValueError('Restricted comparison lacks an explicit visible scope')
                 group=[c for c in cells.values() if c[check.scope]==check.scope_key]
                 if any(cells[t][check.scope]!=check.scope_key for t in check.targets):raise ValueError('Comparison target lies outside scope')
             expected=extreme(c['value'] for c in group)
             actual=all(cells[t]['value']==expected for t in check.targets)
-            if any(not mentions(check.quote,cells[t]['row']) or not mentions(check.quote,cells[t]['column']) for t in check.targets):
+            context=claim_context(text,check.quote)
+            if any(not mentions(context,cells[t]['row']) or not mentions(context,cells[t]['column']) for t in check.targets):
                 raise ValueError('Comparison quote does not identify its targets')
         elif check.scope in ('row_ranges','column_ranges'):
             axis='row' if check.scope=='row_ranges' else 'column';labels=matrix['rows' if axis=='row' else 'columns']
@@ -243,11 +287,9 @@ def validate_numeric_evidence(item,original,matrix):
                 raise ValueError('Numeric evidence references absent or duplicate chart cells')
             contexts=[u for u in re.split(r'(?<=[.!?])\s+|\n|\b(?:while|whereas|however)\b',original,flags=re.I) if check.original_claim in u]
             if len(contexts)==1:
-                named=named_rows(contexts[0],matrix)
-                for left,right in zip(named,named[1:]):
-                    pair=r'\b'+re.escape(left)+r'\s*(?:,\s*)?(?:and|&)\s+'+re.escape(right)+r'\b'
-                    if re.search(pair,contexts[0],re.I) and not {left,right}<={matrix['cells'][cid]['row'] for cid in evidence.cells}:
-                        raise ValueError('Numeric evidence omits a group explicitly sharing the claim')
+                required=shared_rows(contexts[0],evidence.value,matrix)
+                if not required<={matrix['cells'][cid]['row'] for cid in evidence.cells}:
+                    raise ValueError('Numeric evidence omits a group explicitly sharing the claim')
             if quoted_operator(check.original_claim,evidence.value)!=evidence.operator:
                 raise ValueError('Numeric operator contradicts the original comparison')
             truth=all({'eq':eq,'gt':gt,'ge':ge,'lt':lt,'le':le}[evidence.operator](matrix['cells'][cid]['value'],evidence.value) for cid in evidence.cells)
@@ -284,14 +326,13 @@ def validate_generated_numbers(item,matrix):
             refs=[matrix['cells'][cid] for cid in evidence.cells]
             if quoted_operator(evidence.quote,evidence.value)!=evidence.operator:
                 raise ValueError('Generated numeric operator contradicts the written assertion')
-            if not all(mentions(evidence.quote,c['row']) and mentions(evidence.quote,c['column']) for c in refs):
+            context=claim_context(text,evidence.quote)
+            if not all(mentions(context,c['row']) and mentions(context,c['column']) for c in refs):
                 raise ValueError('Generated number lacks an explicit row/category association')
             if not all({'eq':eq,'gt':gt,'ge':ge,'lt':lt,'le':le}[evidence.operator](c['value'],evidence.value) for c in refs):
                 raise ValueError('Generated number contradicts trusted chart arithmetic')
-            named=named_rows(evidence.quote,matrix)
-            for left,right in zip(named,named[1:]):
-                if re.search(r'\b'+re.escape(left)+r'\s*(?:,\s*)?(?:and|&)\s+'+re.escape(right)+r'\b',evidence.quote,re.I) and not {left,right}<={c['row'] for c in refs}:
-                    raise ValueError('Generated numeric evidence omits a grouped row')
+            if not shared_rows(context,evidence.value,matrix)<={c['row'] for c in refs}:
+                raise ValueError('Generated numeric evidence omits a grouped row')
         for match in re.finditer(re.escape(evidence.quote),text):
             covered[evidence.location].extend((match.start()+n.start(),match.start()+n.end()) for n in re.finditer(NUMBER,evidence.quote) if float(n.group().replace(',',''))==evidence.value)
     for location,text in texts.items():

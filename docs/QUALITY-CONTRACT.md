@@ -1,5 +1,13 @@
 # Kiểm tra chất lượng chung cho luồng Flash → Pro
 
+## Prompt v06 và tái dùng giữa các lớp
+
+V06 làm rõ `correction_quote` phải là trích nguyên văn bài gốc, không phải lời giải thích tiếng Việt; kiểm tra mọi chỉnh sửa có nội dung; tính trước các ô bằng mốc so sánh nghiêm ngặt để model kiểm tra `>`/`<` với từng nhóm. Không tự gán lỗi nếu chưa xác định được nhóm/hạng mục.
+
+Bộ kiểm tra chấp nhận phạm vi đặt trước nhận định trong cùng mệnh đề và cặp số gắn đúng thứ tự `respectively`. Không lấy phạm vi từ câu/mệnh đề khác ngoài trích dẫn, không biến hai số của hai nhóm thành mỗi số áp dụng cho cả hai. Trường hợp một câu gộp hai ngành vẫn phải kiểm tra từng ngành cho mọi quốc gia được gộp. Những lỗi số liệu thật, số không có bằng chứng và kết quả bị giữ lại vẫn không được xuất bản.
+
+Gói `B14-HOMEWORK-NOTREND/v06` được chọn bằng dấu kiểm của bộ đề và yêu cầu vở, không theo lớp/học sinh. Dữ liệu lớp, mốc nhận, quyền chấm và ngân sách được gắn riêng. Nguồn hoặc prompt đổi thì phải lập phiên bản mới. Trạng thái gói là `prepared_not_live_accepted`: 137 kiểm thử qua, chưa đồng nghĩa model đã chấm chuẩn. Vở đã trả được tái dùng theo bằng chứng; chuẩn bị lại bài viết không tự gọi Flash hoặc Pro, không lấy lại quyền chi tiêu đã dùng ở lượt cũ.
+
 ## Trả riêng kết quả vở đã xác minh
 
 `deliver-pilot-notebook` chỉ công bố nhận xét vở đã được đối chiếu độc lập, khi bài viết của lượt thử còn giữ lại. Kiểm tra đúng nguồn/giờ nhận, khóa vở, dấu kiểm toàn bộ tệp, nội dung nhận xét đã duyệt. Mọi bài viết bị giữ lại vẫn ẩn; dashboard và Toàn diện chỉ ghi nhận xét vở và “Bài viết: đang chờ trả bản chữa.” Không đánh dấu job/lớp hoàn tất, không sửa raw hay hạ điều kiện nghiệm thu bài viết, không gọi model. Bằng chứng công bố vở nằm riêng trong `notebook_publication`; lần trả bài viết đầy đủ sau này vẫn phải qua mọi kiểm tra cũ. Cả hai chế độ công bố buộc tắt sinh trả phí. 126 kiểm thử đạt.

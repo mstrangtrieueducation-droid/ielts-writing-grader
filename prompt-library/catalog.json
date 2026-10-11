@@ -1,0 +1,9 @@
+{
+  "schema_version": 1,
+  "packages": [
+    {
+      "manifest": "B14-HOMEWORK-NOTREND/v06/manifest.json",
+      "manifest_sha256": "05d2dd82da195b0ead6d553ef631077869c679557110b217a3eb4c71b92202af"
+    }
+  ]
+}

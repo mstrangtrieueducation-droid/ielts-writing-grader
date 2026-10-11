@@ -1,0 +1,55 @@
+FINAL RESPONSE CONTRACT — apply to every class using these verified lesson sources.
+Work in this order within the SAME call: original claims -> corrections -> full revision -> final checks.
+Do not return a correction or revision that retains any original false numerical assertion.
+
+1. Read COMPUTED BOUNDARY FACTS before grading. They are arithmetic facts about table cells,
+not automatic student errors. Bind the quoted threshold to its actual category and ALL named groups.
+For example, with A=40 and B=43, 'both exceed 40' is FALSE because A equals40.
+Explain that in a data correction; a rewrite may use '40 or more' or the two exact values.
+Do not declare the claim merely imprecise, reinterpret 'exceed' as >=, or copy it into the revision.
+Both/all/each apply to every relevant group. True loose bounds can be retained as accurate;
+if you call one imprecise, provide the matching optional precision annotation.
+
+2. Every numeric_check.correction_quote for a non-accurate verdict must be the EXACT
+Correction.original quote from the STUDENT TEXT. It is NOT the Vietnamese error explanation
+and NOT the suggested rewrite. Use an empty string only when verdict is accurate.
+numeric_evidence.check_index points to numeric_checks (1-based), not corrections.
+For a quote with several numerals, include one evidence item per value, including repeated
+top-ranking/year context. Include source numeric claims from ALL four paragraphs.
+
+3. Scope can appear earlier in the SAME clause: 'Regarding Teaching, A had the lowest figure'.
+Use that complete clause as comparison.quote, and 'Regarding Teaching' as scope_quote.
+For a scope carried across sentences, quote the complete passage that includes the named
+scope and target. Do not invent an error simply because the student did not repeat a label.
+Standalone vocabulary examples must supply their own named category, group and unit.
+Do not use an ambiguous highest/lowest example to teach a phrase.
+For every generated highest/lowest/ranked first/most highly rated claim return comparisons,
+including the Overview and every example. Use exact row/column LABELS from the matrix.
+For 'opposite was true', quote the complete contrast with its explicit highest/lowest reference;
+do not give an isolated phrase without an explicit comparison. Generated row_dominance
+statements should explicitly name the row and say 'in all three subjects/categories'.
+If saying 'in most categories', your private evidence must enumerate the verified individual
+categories; prefer a precise, supported overview that the declared schema can actually verify.
+Never change a correct student comparison into a data error just to simplify the schema.
+
+4. With one category and two groups, 'A and B were 13 and 12, respectively' assigns13 to A
+and12 to B; it does NOT assert both values for both groups. In contrast, 'A and B had13
+Medicine and17 Psychology universities' assigns both counts to both countries. Audit the
+actual grammatical attachment. Preserve correct subclaims when a neighbour is wrong.
+
+5. For every numeral in suggestions/revision/examples, generated_numbers.quote must include
+enough literal context to name the row and column. Reuse a full sentence as quote when useful.
+The evidence value/operator is per asserted number. A threshold operator belongs to that
+threshold, not to a different number elsewhere in the same sentence. Do not classify
+measured counts as context numbers to evade checking.
+
+6. Check the revision against the original before returning: every substantive correction
+needs an explicit explanation (including missing category labels, subject/verb complements,
+prepositions, punctuation, capital letters, and who gives/receives ratings).
+Do not make up an error to increase the number of comments. Credit valid learned equivalents.
+Use a strict but fair tone; name the actual unmet taught requirement and how to fix it.
+For a static table, prefer pattern for cross-sectional comparisons. Do not claim that the
+English word trend can ONLY ever mean a change over time; explain the lesson's precision goal.
+
+These instructions are reusable across classes. Never embed a student name, class number,
+student-specific correction or cost exception in the reusable lesson prompt.
