@@ -49,7 +49,8 @@ def run_pilot(pipeline, bindings, selection):
         state=pipeline.store.begin(binding,student,source)
         if state['source']!=source or Binding.model_validate(state['binding'])!=binding:
             raise ValueError('Frozen pilot source or binding changed; preserve saved attempt')
-        if getattr(pipeline.settings,'essay_service_tier','standard')=='batch' and not state.get('notebook'):
+        if (getattr(pipeline.settings,'essay_service_tier','standard')=='batch'
+                and getattr(pipeline.settings,'essay_request_mode','legacy')=='legacy' and not state.get('notebook')):
             raise ValueError('Pro Batch pilot must reuse an already verified notebook')
         # A failed/incomplete pilot must also remain outside automatic delivery.
         state['pilot_review']={'status':'awaiting_review','delivery_authorized':False}

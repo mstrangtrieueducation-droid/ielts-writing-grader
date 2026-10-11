@@ -5,39 +5,10 @@ on:
   workflow_dispatch:
     inputs:
       mode:
-        description: 'Validate access first, or run grading'
+        description: 'Validate, collect saved batches, deliver saved output, or submit new per-essay batches'
         type: choice
-        options: [preflight, pilot, collect-pro-batch, deliver-pilot, deliver-pilot-notebook, deliver-teacher-authorized, grade]
+        options: [preflight, pilot, collect-batches, collect-pro-batch, deliver-pilot, deliver-pilot-notebook, deliver-teacher-authorized, grade]
         default: preflight
-      authorized_flash_trial:
-        description: 'Explicitly authorized bounded Flash pilot; leaves scheduled generation off'
-        type: boolean
-        default: false
-      authorized_hybrid_trial:
-        description: 'Explicitly approved one-student Pro Flex pilot; preserves generation OFF for scheduled runs'
-        type: boolean
-        default: false
-      authorized_flash_bundle_trial:
-        description: 'Approved one-call Flash two-essay pilot; keeps scheduled generation OFF'
-        type: boolean
-        default: false
-      authorized_pro_batch_trial:
-        description: 'New explicit Pro Batch pilot approval; never retries a saved submission'
-        type: boolean
-        default: false
-      authorized_pro_standard_trial:
-        description: 'Explicitly approved immediate one-student Pro Standard pilot'
-        type: boolean
-        default: false
-      pro_output_limit:
-        description: 'Output plus thinking limit from the explicitly approved Standard pilot plan'
-        type: choice
-        options: ['8192','16384']
-        default: '8192'
-      hybrid_student_budget_vnd:
-        description: 'Approved cumulative student ceiling for this pilot, including prior paid trials'
-        type: string
-        default: '1000'
   repository_dispatch:
     types: [new_scan_uploaded, on_form_submit]
 permissions:
@@ -48,14 +19,14 @@ concurrency:
   cancel-in-progress: false
 jobs:
   grade:
-    # Uploading source code alone must not silently activate paid grading or live writes.
-    if: vars.GRADING_ENABLED == 'true' || github.event_name == 'workflow_dispatch'
+    # Collection must continue with paid generation disabled. Its CLI gates live
+    # dashboard/Sheets delivery separately on GRADING_ENABLED.
     runs-on: ubuntu-latest
     timeout-minutes: 120
     env:
       GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-      GEMINI_GENERATION_ENABLED: ${{ (inputs.mode == 'collect-pro-batch' || inputs.mode == 'deliver-pilot' || inputs.mode == 'deliver-pilot-notebook' || inputs.mode == 'deliver-teacher-authorized') && 'false' || inputs.mode == 'pilot' && (inputs.authorized_flash_trial || inputs.authorized_hybrid_trial || inputs.authorized_flash_bundle_trial || inputs.authorized_pro_batch_trial || inputs.authorized_pro_standard_trial) && 'true' || vars.GEMINI_GENERATION_ENABLED }}
-      PILOT_BATCH_SUBMIT_AUTHORIZED: ${{ inputs.mode == 'pilot' && inputs.authorized_pro_batch_trial && 'true' || 'false' }}
+      GRADING_ENABLED: ${{ vars.GRADING_ENABLED || 'false' }}
+      GEMINI_GENERATION_ENABLED: ${{ (inputs.mode == 'collect-batches' || inputs.mode == 'collect-pro-batch' || inputs.mode == 'deliver-pilot' || inputs.mode == 'deliver-pilot-notebook' || inputs.mode == 'deliver-teacher-authorized') && 'false' || vars.GEMINI_GENERATION_ENABLED || 'false' }}
       GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
       GOOGLE_STATE_OAUTH_JSON: ${{ secrets.GOOGLE_STATE_OAUTH_JSON }}
       DASHBOARD_MASTER_KEY: ${{ secrets.DASHBOARD_MASTER_KEY }}
@@ -64,12 +35,14 @@ jobs:
       FOLDER_STATE_ID: ${{ vars.FOLDER_STATE_ID }}
       GUIDELINES_SPREADSHEET_ID: ${{ vars.GUIDELINES_SPREADSHEET_ID }}
       GEMINI_NOTEBOOK_MODEL: ${{ vars.GEMINI_NOTEBOOK_MODEL }}
-      # The earlier Flash-only trial authorization must never authorize a Pro call.
-      GEMINI_ESSAY_MODEL: ${{ inputs.mode == 'pilot' && (inputs.authorized_flash_trial || inputs.authorized_flash_bundle_trial) && 'gemini-3.8-flash' || (inputs.mode == 'collect-pro-batch' || inputs.mode == 'pilot' && (inputs.authorized_hybrid_trial || inputs.authorized_pro_batch_trial || inputs.authorized_pro_standard_trial)) && 'gemini-3.1-pro-preview' || vars.GEMINI_ESSAY_MODEL }}
-      GEMINI_ESSAY_BUNDLE: ${{ inputs.mode == 'pilot' && inputs.authorized_flash_bundle_trial && 'true' || vars.GEMINI_ESSAY_BUNDLE || 'false' }}
-      GEMINI_PRO_MAX_OUTPUT_TOKENS: ${{ inputs.mode == 'pilot' && inputs.authorized_pro_standard_trial && inputs.pro_output_limit || '8192' }}
-      GEMINI_ESSAY_SERVICE_TIER: ${{ inputs.mode == 'pilot' && inputs.authorized_pro_standard_trial && 'standard' || (inputs.mode == 'collect-pro-batch' || inputs.mode == 'pilot' && inputs.authorized_pro_batch_trial) && 'batch' || inputs.mode == 'pilot' && inputs.authorized_flash_bundle_trial && 'standard' || inputs.mode == 'pilot' && inputs.authorized_hybrid_trial && !inputs.authorized_flash_trial && 'flex' || vars.GEMINI_ESSAY_SERVICE_TIER || 'standard' }}
-      GEMINI_STUDENT_BUDGET_VND: ${{ (inputs.mode == 'collect-pro-batch' || inputs.mode == 'pilot' && (inputs.authorized_hybrid_trial || inputs.authorized_flash_bundle_trial || inputs.authorized_pro_batch_trial || inputs.authorized_pro_standard_trial)) && !inputs.authorized_flash_trial && inputs.hybrid_student_budget_vnd || vars.GEMINI_STUDENT_BUDGET_VND || '1000' }}
+      # Saved legacy jobs keep their frozen contract. New grade/collection runs
+      # cannot be redirected to Standard/Flex by stale repository variables.
+      GEMINI_ESSAY_REQUEST_MODE: ${{ (inputs.mode == 'collect-pro-batch' || inputs.mode == 'deliver-pilot' || inputs.mode == 'deliver-pilot-notebook' || inputs.mode == 'deliver-teacher-authorized') && 'legacy' || 'per_essay_batch' }}
+      GEMINI_ESSAY_MODEL: 'gemini-3.1-pro-preview'
+      GEMINI_ESSAY_BUNDLE: 'false'
+      GEMINI_PRO_MAX_OUTPUT_TOKENS: ${{ (inputs.mode == 'collect-pro-batch' || inputs.mode == 'deliver-pilot' || inputs.mode == 'deliver-pilot-notebook' || inputs.mode == 'deliver-teacher-authorized') && '8192' || '16384' }}
+      GEMINI_ESSAY_SERVICE_TIER: 'batch'
+      GEMINI_STUDENT_BUDGET_VND: ${{ vars.GEMINI_STUDENT_BUDGET_VND || '1000' }}
       DASHBOARD_BASE_URL: ${{ vars.DASHBOARD_BASE_URL }}
       CLASS_SHEET_MAP_JSON: ${{ secrets.CLASS_SHEET_MAP_JSON }}
       PILOT_SELECTION_JSON: ${{ secrets.PILOT_SELECTION_JSON }}
@@ -95,12 +68,20 @@ jobs:
       - name: Verify dashboard rendering with synthetic fixtures
         run: python tests/ui_smoke.py
       - name: Validate API access
+        id: preflight
         run: python -m src.main --preflight
+      - name: Collect saved per-essay batches and finish verified delivery
+        if: github.event_name != 'workflow_dispatch' || inputs.mode == 'collect-batches' || inputs.mode == 'grade'
+        env:
+          GEMINI_GENERATION_ENABLED: 'false'
+        run: python -m src.main --collect-batches
       - name: Grade and verify delivery
-        if: github.event_name != 'workflow_dispatch' || inputs.mode == 'grade'
+        # A held paid result remains a visible collector failure, but cannot block
+        # unrelated new work. Tests/setup/preflight failures and cancellation still stop grading.
+        if: ${{ !cancelled() && steps.preflight.outcome == 'success' && (github.event_name != 'workflow_dispatch' || inputs.mode == 'grade') && vars.GRADING_ENABLED == 'true' && vars.GEMINI_GENERATION_ENABLED == 'true' }}
         run: python -m src.main
       - name: Grade selected real pilot privately
-        if: github.event_name == 'workflow_dispatch' && inputs.mode == 'pilot'
+        if: github.event_name == 'workflow_dispatch' && inputs.mode == 'pilot' && vars.GRADING_ENABLED == 'true' && vars.GEMINI_GENERATION_ENABLED == 'true'
         run: python -m src.main --pilot
       - name: Collect the saved Pro Batch pilot without generation
         if: github.event_name == 'workflow_dispatch' && inputs.mode == 'collect-pro-batch'

@@ -2,7 +2,7 @@
 
 Mã nguồn chấm vở, sổ từ vựng, bài viết homework và PDF kiểm tra, với checkpoint riêng trên Drive, dashboard mã hóa và ghi nhận xét chính xác vào Toàn diện. Đây là một dự án triển khai riêng; tạo thư mục này không tự thay thế dashboard, trigger hoặc heartbeat đang vận hành.
 
-Lựa chọn mới nhất 11/10/2026: giữ **Flash cho đầu vào/vở**, **Pro cho hai bài viết gõ của một em trong một lượt**. Hướng Pro Batch đã có mã và kiểm thử phục hồi, nhưng chưa gửi lượt trả phí hoặc nghiệm thu bản chữa thật. Xem [quy trình Pro Batch](docs/pro-batch-pilot.md). Các đoạn Flash-only và Flex phía dưới là lịch sử phương án; không cho phép tự chạy lại các pilot đã bị từ chối. Hai cờ chạy tự động vẫn OFF, trần thường xuyên 1.000đ/em và 14.900đ/lớp/buổi giữ nguyên. Batch giảm giá so với Standard, không bảo đảm đủ chất lượng/hoàn thành trong trần này hoặc đúng 24 giờ.
+Lựa chọn mới nhất 12/10/2026: giữ **Flash cho đầu vào/vở**, chuyển bài viết mới sang **Gemini Pro Batch, mỗi bài là một request độc lập**. Giữ toàn bộ nguồn nguyên văn trong kho, dùng bản quy tắc theo buổi và bài mẫu phù hợp đã được Cô cho phép biên soạn để giảm nội dung lặp. Không gộp hai bài, không gọi Standard/Flex hoặc tự fallback khi lỗi. Xem [quy trình Pro Batch cho bài mới](docs/pro-batch-production.md); [pilot Batch gộp bài](docs/pro-batch-pilot.md) chỉ là lịch sử. Giữ nguyên các bài đã trả, các cờ kích hoạt và trần thường xuyên 1.000đ/em, 14.900đ/lớp/buổi. Batch giảm 50% đơn giá token Standard, không bảo đảm tổng hóa đơn giảm đúng một nửa, đủ ngân sách, hết lỗi hoặc hoàn tất đúng 24 giờ.
 
 ## Những điểm đã sửa so với bản directive
 
@@ -22,7 +22,7 @@ Lựa chọn mới nhất 11/10/2026: giữ **Flash cho đầu vào/vở**, **Pr
 
 `gemini_service.py`, `retry.py`: SDK Google GenAI, giới hạn request. Các thao tác đọc/ghi nguồn có backoff; riêng sinh kết quả trả phí chỉ gửi một lần, tắt cả retry SDK. Timeout/429/5xx hoặc JSON lỗi được giữ lại, không tự trả tiền để chạy lại. Phản hồi và token usage được lưu riêng trên Drive trước validation.
 
-`graders/`: mọi kiểm tra ảnh vở/từ vựng, outline được giao và OCR chỉ dùng Flash, kể cả lượt kiểm tra độc lập khi nghi thiếu/đánh máy. Bất đồng hoặc ảnh chưa đọc rõ được giữ chờ. Luồng Flash cũ chữa mỗi bài một lượt; cấu hình hybrid mới gom đúng hai bài homework của một học sinh vào một lượt Pro chỉ nhận chữ. Cả hai dùng JSON Schema và kiểm tra bằng mã, không gọi model kiểm toán/sửa lại riêng. Kiểm tra bằng mã không thay thế kiểm toán ngữ nghĩa độc lập.
+`graders/`: mọi kiểm tra ảnh vở/từ vựng, outline được giao và OCR chỉ dùng Flash, kể cả lượt kiểm tra độc lập khi nghi thiếu/đánh máy. Bất đồng hoặc ảnh chưa đọc rõ được giữ chờ. Mỗi bài viết mới dùng một request Pro Batch chỉ nhận chữ, đủ nguồn lý thuyết/bài mẫu, JSON Schema và kiểm tra bằng mã; không gọi model kiểm toán/sửa lại riêng. Kiểm tra bằng mã không thay thế kiểm toán ngữ nghĩa độc lập. Hợp đồng bundle cũ chỉ dùng để đọc/giao kết quả lịch sử.
 
 `pipeline.py`, `state.py`: lưu phiên bản rubric, nguồn, receipt, kết quả và từng pha giao bài. Kết quả đã hoàn tất không tự chấm lại. Có lỗi tracker/Pages thì dùng kết quả đã lưu để giao lại.
 
@@ -57,20 +57,23 @@ Repository variables:
 | `FOLDER_INCOMING_SCAN_ID` | Thư mục scan chưa xử lý |
 | `FOLDER_PROCESSED_SCAN_ID` | Thư mục scan xử lý xong, khác incoming/state |
 | `GEMINI_NOTEBOOK_MODEL` | `gemini-3.8-flash`, duy nhất cho ảnh/vở/từ vựng/OCR |
-| `GEMINI_ESSAY_MODEL` | `gemini-3.8-flash` cho luồng Flash; `gemini-3.1-pro-preview` cho hybrid hai bài homework, chỉ nhận chữ |
+| `GEMINI_ESSAY_MODEL` | `gemini-3.1-pro-preview` cho bài viết mới, chỉ nhận chữ |
+| `GEMINI_ESSAY_REQUEST_MODE` | `per_essay_batch`; mỗi bài một request. `legacy` chỉ dành cho kết quả lịch sử |
+| `GEMINI_ESSAY_BUNDLE` | `false` cho các lượt mới |
+| `GEMINI_PRO_MAX_OUTPUT_TOKENS` | `16384` mỗi bài, gồm suy luận và đầu ra |
 | `GEMINI_STUDENT_BUDGET_VND` | Mặc định `1000`, tổng Flash + Pro mỗi học sinh/buổi trong hybrid, cộng dồn cả các job mới |
-| `GEMINI_ESSAY_SERVICE_TIER` | Mặc định `standard`; `flex` chỉ cho Pro bundle được cấu hình rõ, không fallback Standard |
+| `GEMINI_ESSAY_SERVICE_TIER` | `batch`, không fallback Standard/Flex |
 | `DASHBOARD_BASE_URL` | URL Pages gốc, HTTPS, không có fragment |
 | `GRADING_ENABLED` | Chỉ đặt `true` sau preflight và nghiệm thu một bài thử |
 | `GEMINI_GENERATION_ENABLED` | Mặc định tắt; phải bật riêng mới được gửi yêu cầu sinh trả phí |
 
-Theo lựa chọn sau cùng của Cô ngày 10/10/2026, **Flash xử lý ảnh/vở/outline, Pro gom hai bài viết trong một lượt**. Pro vẫn tính phí đầu vào chữ của chính lượt Pro; không thể tính khoản này theo giá Flash. Chặn Pro cho ảnh, vở, OCR và các lượt chữa riêng lẻ; không fallback model. Preflight chỉ kiểm tra quyền truy cập, không chứng minh chất lượng chữa bài. Không dùng `gemini-1.5-flash/pro` trong triển khai mới.
+Theo lựa chọn sau cùng ngày 12/10/2026, **Flash xử lý ảnh/vở/outline; Pro Batch chữa từng bài độc lập**. Mỗi request phải có bản kiến thức đúng buổi đã đối chiếu nguồn và giữ riêng bài gốc; kho nguyên văn không bị thay thế. Pro vẫn tính phí đầu vào chữ của từng request; không thể tính theo giá Flash. Chặn Pro cho ảnh/vở/OCR, chặn Standard/Flex cho bài viết mới. Preflight chỉ kiểm tra quyền truy cập, không chứng minh chất lượng chữa bài.
 
-**Trạng thái hybrid: đã chuẩn bị mã, chưa chạy trả phí hoặc nghiệm thu.** Trần 1.000đ/em không đủ cho dự phòng 8.192 output token của Pro (riêng output tối đa khoảng 2.556đ ở tỷ giá giả định 26.000đ/USD). Luồng dừng ngay trước đọc vở nếu kế hoạch không đủ ngân sách. Hai cờ generation/grading vẫn OFF. Không coi lượt dừng vì ngân sách là đã chấm xong; không tăng trần, ép cắt bản chữa hoặc tự đổi sang Batch/Flex để vượt giới hạn.
+Luồng dừng trước đọc vở nếu dự phòng đầy đủ từng request vượt ngân sách hiện hành. Không coi lượt bị giữ vì ngân sách là đã chấm xong, không tăng trần hoặc cắt lỗi cần chữa. Việc biên soạn nguồn theo buổi phải có phiên bản, định vị nguồn và phạm vi đã được duyệt. Collector vẫn thu job đã gửi khi generation OFF; `GRADING_ENABLED` quyết định việc đăng dashboard/ghi Sheets. Hai cờ phải cùng true mới được gửi yêu cầu sinh mới. Xem chi tiết [gửi, thu và phục hồi Batch](docs/pro-batch-production.md).
 
-Ví dụ dự trù, **không phải hóa đơn hoặc đo thực tế**: một lượt vở/outline Flash 6.000 input + 1.000 output khoảng 215đ; một lượt Pro gom hai bài 3.000 input + 4.000–6.000 output khoảng 1.404–2.028đ. Tổng khoảng **1.619–2.243đ/em**. Output gồm cả suy luận và JSON, lượng lỗi và độ dài bản chữa làm thay đổi chi phí. Giữ nguyên trần lớp/buổi 14.900đ đang có; trần này cũng có thể giữ lại các học sinh còn chờ.
+Chi phí tính theo usage thực tế và token suy luận, tách khỏi số tiền đang giữ dự phòng. Với mục tiêu tổng hai bài 10–15 nghìn token đầu vào và 10–15 nghìn token đầu ra gồm suy luận, dự trù Batch khoảng **1.820–2.730đ/em**, tỷ giá 26.000đ/USD, chưa gồm Flash/thuế. Đây không phải cam kết hóa đơn hay phê duyệt tăng trần: mức 1.000đ/em và 14.900đ/lớp/buổi vẫn giữ cho tới khi có cấu hình ngân sách mới được duyệt. Không lấy hóa đơn bundle cũ chia hai để hứa tổng chi phí mới.
 
-**Lượt thử tiết kiệm đang chuẩn bị:** Pro Flex dùng cùng model với giá bằng 50% Standard, chờ tối đa 15 phút và chỉ gửi một yêu cầu sinh, không retry/fallback. Notebook đã kiểm tra chỉ tái dùng sau xác minh lại nguồn/receipt/checksum. Trần từng lượt thử phải được Cô chấp thuận riêng nếu vượt 1.000đ; workflow `authorized_hybrid_trial` chỉ bật sinh cho đúng pilot đó, không đổi cờ lịch tự động. Ngân sách cộng dồn của em vẫn bao gồm các lượt trước, không xóa lịch sử phí; `trial_cost_ceiling_vnd` giới hạn riêng khoản mới. Chi phí kiểm tra vở mới của học sinh khác không được suy ra là 0 từ pilot tái dùng vở này.
+Notebook đã kiểm tra chỉ tái dùng khi nguồn/receipt/checksum khớp. Ngân sách cộng dồn vẫn gồm các lượt trước; không xóa lịch sử phí. Chi phí vở mới không được suy ra là 0 từ pilot tái dùng vở. Các input workflow từng cho phép thử Standard/Flex đã bỏ; pilot mới cũng dùng từng bài Pro Batch và không tự bật hai cờ toàn cục.
 
 Service account cần Sheets API + Drive API và quyền Editor trên guideline/tracker/state/incoming/processed; quyền đọc các Form response, bài học, chart và tệp học sinh. Nếu tạo tệp state bằng service account, dùng **Shared Drive** hỗ trợ service account và cấp đúng quyền. Service account thường không có storage quota để tạo tệp mới trong My Drive: chia sẻ một thư mục My Drive đơn thuần không bảo đảm ghi state được. Không chuyển tệp scan gốc ra khỏi vị trí đang cần cho lớp; incoming nên là bản scan dành riêng cho pipeline.
 
@@ -131,7 +134,7 @@ Body `{"event_type":"new_scan_uploaded"}` hoặc `{"event_type":"on_form_submit"
 
 Kết nối repo/API/billing và lượt thử riêng không đồng nghĩa đã bật chấm toàn bộ. Chỉ bật `GRADING_ENABLED` sau khi nghiệm thu chất lượng và giao kết quả; trạng thái triển khai thật phải đọc từ cấu hình và bằng chứng chạy. Không tạo thêm automation trong Codex khi workflow chưa được nghiệm thu.
 
-Lượt thử trả phí được Cô chỉ định riêng dùng manual `mode=pilot`, `authorized_flash_trial=true` và `PILOT_SELECTION_JSON` giới hạn đúng một học sinh. Điều này không bật hai biến generation/schedule toàn cục. Sau khi đối chiếu bài gốc/số liệu và lưu bằng chứng chất lượng gắn SHA256 của payload, `mode=deliver-pilot` chỉ đăng kết quả đã duyệt, không gọi chấm lại. Không duyệt payload lỗi để có kết quả đăng; một lượt thử chưa chứng minh chất lượng cho mọi đề/lớp.
+Lượt thử trả phí được chỉ định qua manual `mode=pilot` và `PILOT_SELECTION_JSON` giới hạn đúng phạm vi. Pilot mới dùng Pro Batch từng bài và yêu cầu cả hai cờ chạy đã được bật theo thẩm quyền; input workflow không thể ghi đè chúng. Sau khi đối chiếu bài gốc/số liệu và lưu bằng chứng chất lượng gắn SHA256 của payload, `mode=deliver-pilot` chỉ đăng kết quả đã duyệt, không gọi chấm lại. Một lượt thử chưa chứng minh chất lượng cho mọi đề/lớp.
 
 ## Kiểm thử và vận hành
 

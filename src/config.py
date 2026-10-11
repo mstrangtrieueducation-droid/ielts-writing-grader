@@ -28,6 +28,9 @@ class Settings:
     essay_service_tier: str = 'standard'
     essay_bundle: bool = False
     pro_max_output_tokens: int = 8192
+    # Direct construction is retained for replaying historical saved jobs/tests.
+    # Environment-driven production defaults to one independent Pro Batch request per essay.
+    essay_request_mode: str = 'legacy'
 
     @classmethod
     def from_env(cls):
@@ -45,10 +48,14 @@ class Settings:
         mapping = json.loads(required('CLASS_SHEET_MAP_JSON'))
         if not isinstance(mapping,dict) or not mapping or not all(isinstance(k,str) and isinstance(v,str) and v for k,v in mapping.items()):
             raise ValueError('CLASS_SHEET_MAP_JSON must map classroom names to actual spreadsheet IDs')
+        request_mode = os.getenv('GEMINI_ESSAY_REQUEST_MODE', 'per_essay_batch').strip()
+        if request_mode not in ('per_essay_batch', 'legacy'):
+            raise ValueError('Unknown essay request mode')
+        production = request_mode == 'per_essay_batch'
         settings = cls(required('GEMINI_API_KEY'), accounts, required('GUIDELINES_SPREADSHEET_ID'),
             required('FOLDER_STATE_ID'), required('FOLDER_INCOMING_SCAN_ID'),
             required('FOLDER_PROCESSED_SCAN_ID'), required('GEMINI_NOTEBOOK_MODEL'),
-            required('GEMINI_ESSAY_MODEL'), key, required('DASHBOARD_BASE_URL').rstrip('/'),
+            os.getenv('GEMINI_ESSAY_MODEL', 'gemini-3.1-pro-preview').strip(), key, required('DASHBOARD_BASE_URL').rstrip('/'),
             mapping, Path(os.getenv('DASHBOARD_OUTPUT_DIR', 'dashboard_data')),
             int(os.getenv('MAX_JOBS_PER_RUN', '12')), int(os.getenv('GEMINI_RPM', '6')))
         state_auth = os.getenv('GOOGLE_STATE_OAUTH_JSON', '').strip()
@@ -64,12 +71,17 @@ class Settings:
         if not settings.dashboard_base_url.startswith('https://') or settings.max_jobs < 1 or settings.requests_per_minute < 1:
             raise ValueError('Invalid dashboard URL or execution limits')
         if settings.notebook_model!='gemini-3.8-flash' or settings.essay_model not in ('gemini-3.8-flash','gemini-3.1-pro-preview'):
-            raise ValueError('Notebook/OCR must use Flash; essays use Flash or an explicit text-only Pro bundle')
+            raise ValueError('Notebook/OCR must use Flash; essay model is not verified')
         from dataclasses import replace
         settings=replace(settings,student_budget_vnd=int(os.getenv('GEMINI_STUDENT_BUDGET_VND','1000')),
-            essay_service_tier=os.getenv('GEMINI_ESSAY_SERVICE_TIER','standard'),
+            essay_service_tier=os.getenv('GEMINI_ESSAY_SERVICE_TIER','batch' if production else 'standard'),
             essay_bundle=os.getenv('GEMINI_ESSAY_BUNDLE','false')=='true',
-            pro_max_output_tokens=int(os.getenv('GEMINI_PRO_MAX_OUTPUT_TOKENS','8192')))
+            pro_max_output_tokens=int(os.getenv('GEMINI_PRO_MAX_OUTPUT_TOKENS','16384' if production else '8192')),
+            essay_request_mode=request_mode)
+        if production and (settings.essay_model != 'gemini-3.1-pro-preview'
+                or settings.essay_service_tier != 'batch' or settings.essay_bundle
+                or settings.pro_max_output_tokens != 16384):
+            raise ValueError('Per-essay production requires Pro Batch, no bundle, and 16384 output tokens; no fallback')
         if settings.pro_max_output_tokens not in (8192,16384):
             raise ValueError('Unverified Pro output plan; generation held')
         if settings.student_budget_vnd<1:
@@ -77,5 +89,5 @@ class Settings:
         if settings.essay_service_tier not in ('standard','flex','batch'):
             raise ValueError('Unverified service tier; generation held')
         if settings.essay_service_tier in ('flex','batch') and settings.essay_model!='gemini-3.1-pro-preview':
-            raise ValueError('Discounted configuration is scoped to the explicit Pro homework bundle')
+            raise ValueError('Discounted configuration is scoped to the verified Pro model')
         return settings

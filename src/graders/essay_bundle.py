@@ -174,6 +174,9 @@ def grade_bundle(ai, settings, specs, texts, checkpoint, pending=None, teacher_k
 
 def verify_saved_quality(state,binding):
     """Recheck the frozen new-contract result before ANY dashboard/tracker write."""
+    if state.get('batch_essay_work'):
+        from .essay_batch import verify_saved_quality as verify_batch_quality
+        return verify_batch_quality(state,binding)
     work=state.get('bundle_work',{})
     if not work or work.get('mode') in LEGACY_MODES:
         return  # Old results retain their historical criteria and teacher pilot gate.

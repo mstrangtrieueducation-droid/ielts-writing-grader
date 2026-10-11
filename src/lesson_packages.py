@@ -55,13 +55,23 @@ def verify_package_sources(binding,source_checksums,trial_state=None):
         authority=binding.regrade_authorizations.get(sid,'')
         trial=state.get('lesson_package_trial',{})
         cost=state.get('cost_exception',{})
+        per_essay=package.get('request_mode')=='per_essay_batch'
+        expected_calls=len(binding.essays) if per_essay else 1
+        limits=cost.get('generation_limits',{})
+        valid_limits=limits=={'gemini-3.1-pro-preview':expected_calls}
+        if per_essay and isinstance(limits,dict):
+            valid_limits=(limits.get('gemini-3.1-pro-preview')==expected_calls
+                and set(limits)<= {'gemini-3.1-pro-preview','gemini-3.8-flash'}
+                and type(limits.get('gemini-3.8-flash',0)) is int
+                and 0<=limits.get('gemini-3.8-flash',0)<=2)
         if (not authority or trial!={'package_id':package['id'],'package_version':package['version'],
             'manifest_sha256':fingerprint(package),'job_id':state.get('job_id'),
             'student_id':sid,'authority':authority}
             or not state.get('job_id') or cost.get('job_id')!=state['job_id']
             or cost.get('student_id')!=sid or cost.get('authority')!=authority
-            or cost.get('maximum_generation_calls')!=1
-            or cost.get('generation_limits')!={'gemini-3.1-pro-preview':1}
+            or not valid_limits
+            or cost.get('maximum_generation_calls')!=sum(limits.values())
+            or per_essay and state.get('generation_plan',{}).get('request_mode')!='per_essay_batch'
             or state.get('pilot_review',{}).get('status')!='awaiting_review'):
             raise ValueError('Prepared lesson package requires a separately authorized live quality trial before routine generation')
     if binding.lesson!=package['lesson'] or notebook_fingerprint(binding)!=package['notebook_fingerprint']:

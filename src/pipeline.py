@@ -1,5 +1,6 @@
 import json
 import hashlib
+import os
 from datetime import datetime, timezone
 from .schemas import Binding
 from .parsers import col_number, match_student, parse_receipt, drive_ids, parse_filename, digest
@@ -11,6 +12,7 @@ from .graders.essay_grader import grade_essay, transcribe
 from .graders.essay_bundle import grade_bundle
 from .delivery import deliver
 from .announcements import save_draft
+from .pro_batch import BatchPending
 
 def cell(row, col):
     number=col_number(col)
@@ -119,10 +121,37 @@ class Pipeline:
             state['payload']=self.payload(binding,student,source,'too_late',TOO_LATE)
             self.store.save(state)
             return
+        per_essay_batch=getattr(self.settings,'essay_request_mode','legacy')=='per_essay_batch'
+        if per_essay_batch and binding.assignment_type=='homework':
+            if state.get('bundle_work') or state.get('essay_work') or (state['essay_results'] and not state.get('batch_essay_work')):
+                raise ValueError('Historical essay attempts are preserved; use their saved transport for recovery')
+            plan={'model':'gemini-3.1-pro-preview','service_tier':'batch',
+                'request_mode':'per_essay_batch','max_output_tokens':16384,'thinking_level':'medium'}
+            if state.get('generation_plan') and state['generation_plan']!=plan:
+                raise ValueError('Frozen generation plan differs; no automatic model or transport migration')
+            if not state.get('generation_plan'):
+                state['generation_plan']=plan
+                self.store.save(state)
         if self.ai is not None and hasattr(self.ai,'bind_budget'):
             self.ai.bind_budget(self.store,binding,state)
+        if per_essay_batch and state.get('batch_essay_work'):
+            # A paid asynchronous attempt resumes solely from frozen evidence.
+            self.complete_essay_batch(state,binding)
+            return
+        if per_essay_batch and binding.assignment_type in ('homework','assessment'):
+            if binding.assignment_type!='homework':
+                raise ValueError('Assessment requires its separate verified test grading plan')
+            from .lesson_packages import resolve_package
+            from .teacher_knowledge import load_teaching_context
+            from .graders.essay_batch import prepare_essay_requests
+            package=resolve_package(binding.essays)
+            corpus=load_teaching_context(self.store,state,package)
+            requests=prepare_essay_requests(binding.essays,source['essay_texts'],teacher_knowledge=corpus)
+            self.ai.preflight_student_plan(binding)
+            # Reserve room for every independent request before any Flash notebook cost.
+            self.ai.preflight_essay_batch_prompts(requests)
         hybrid=self.settings.essay_model=='gemini-3.1-pro-preview' or getattr(self.settings,'essay_bundle',False)
-        if hybrid and binding.assignment_type in ('homework','assessment') and not state['essay_results'] and not state.get('bundle_work'):
+        if hybrid and not per_essay_batch and binding.assignment_type in ('homework','assessment') and not state['essay_results'] and not state.get('bundle_work'):
             if self.ai is None or not hasattr(self.ai,'preflight_student_plan'):
                 raise ValueError('Hybrid budget planning is required before notebook generation')
             self.ai.preflight_student_plan(binding)
@@ -190,6 +219,11 @@ class Pipeline:
                 state['transcription']=transcribe(self.ai,self.settings,binding,files,counts)
                 self.store.save(state)
             source['essay_texts']={str(k):v for k,v in state['transcription'].items()}
+        if per_essay_batch:
+            state['notebook_summary']=notebook_summary
+            self.store.save(state)
+            self.complete_essay_batch(state,binding)
+            return
         if hybrid and len(state['essay_results'])!=len(binding.essays):
             if state['essay_results'] or state.get('essay_work'):
                 raise ValueError('Existing individual essay attempts are preserved; no automatic hybrid regrade')
@@ -219,6 +253,109 @@ class Pipeline:
         state['payload']=self.payload(binding,student,source,'graded',notebook_summary,
             [state['essay_results'][str(e.exercise)] for e in binding.essays])
         self.store.save(state)
+
+    def complete_essay_batch(self,state,binding):
+        """Finish a frozen per-essay job without reading Form, PDF or notebook media."""
+        from .schemas import NotebookResult
+        from .graders.essay_batch import grade_essay_batch
+        source,student=state['source'],state['student']
+        if binding.assignment_type!='homework' or source.get('missing'):
+            raise ValueError('Per-essay Batch requires homework with frozen source evidence')
+        receipts=[source.get('received_at')]+[
+            item.get('received_at') for item in source.get('exercise_receipts',{}).values()]
+        if any(not value or not receipt_allowed(binding,parse_receipt(value)) for value in receipts):
+            raise ValueError('Frozen homework receipt is not eligible for detailed grading')
+        if self.store.locked_notebook(binding,student):
+            raise ValueError('Notebook lock prevents essay publication')
+        override=binding.notebook_overrides.get(student['id'],'').strip()
+        if not override and (not state.get('notebook') or
+                notebook_state(NotebookResult.model_validate(state['notebook']))!='pass'):
+            raise ValueError('Per-essay Batch requires a previously verified passed notebook')
+        if not state.get('payload'):
+            def checkpoint(work):
+                state['batch_essay_work']=work
+                self.store.save(state)
+            results=grade_essay_batch(self.ai,self.settings,binding.essays,source['essay_texts'],
+                checkpoint,state.get('batch_essay_work'),teacher_knowledge=state.get('teacher_compiled_context') or state.get('teacher_knowledge'))
+            state['essay_results']={str(result.exercise):result.model_dump(mode='json') for result in results}
+            day=parse_receipt(source['received_at']).strftime('%d/%m/%Y')
+            warning=state.get('notebook_summary') or ('Vở đạt yêu cầu theo xác nhận của Cô.' if override
+                else f'Đã ghi nhận vở nộp ngày {day} — Đạt yêu cầu.')
+            state['payload']=self.payload(binding,student,source,'graded',warning,
+                [state['essay_results'][str(spec.exercise)] for spec in binding.essays])
+            state.pop('last_error',None)
+            self.store.save(state)
+
+    def batch_publication_target(self,state,bindings,roster=None):
+        """Use one live-assignment/identity guard for collection and regular resumption."""
+        frozen=Binding.model_validate(state['binding'])
+        matches=[b for b in bindings if b.class_name==frozen.class_name and b.task_code==frozen.task_code]
+        if len(matches)!=1 or not eligible_binding(matches[0]):
+            return None
+        if matches[0].model_dump(mode='json')!=frozen.model_dump(mode='json'):
+            raise ValueError('Live assignment differs from frozen Batch; collected results remain private')
+        spreadsheet=self.settings.class_sheets.get(frozen.class_name)
+        if not spreadsheet:
+            raise ValueError('Missing tracker mapping for collected Batch')
+        if roster is None:
+            roster=self.sheets.roster(spreadsheet,matches[0])
+        students=[s for s in roster if s['id']==state['student']['id']]
+        if len(students)!=1 or students[0]['name']!=state['student']['name']:
+            raise ValueError('Student identity differs from frozen Batch')
+        # Row changes caused by sorting are valid; use the current roster row.
+        return students[0],spreadsheet,roster
+
+    def collect_batches(self,bindings,limit=None):
+        """Poll saved jobs even with generation off; deliver only when live grading is enabled.
+
+        A collector never discovers student submissions or creates a provider job. It can
+        receive paid results while a lesson is disabled, but cannot publish against a
+        changed assignment or student identity.
+        """
+        if os.getenv('GEMINI_GENERATION_ENABLED')=='true':
+            raise ValueError('Batch collection requires generation OFF')
+        report={'completed':0,'pending':0,'staged':0,'errors':[],'generation_calls':0}
+        candidates=[s for s in self.store.jobs.values() if s.get('batch_essay_work')
+            and s.get('phase')!='complete' and not s.get('invalidation')
+            and s.get('pilot_review',{}).get('status') not in ('rejected','invalidated')]
+        candidates.sort(key=lambda s:s.get('batch_collection_checked_at',s.get('updated_at','')))
+        for state in candidates[:limit or self.settings.max_jobs]:
+            try:
+                review=state.get('pilot_review',{})
+                if review.get('status') in ('rejected','invalidated'):
+                    continue
+                frozen=Binding.model_validate(state['binding'])
+                self.ai.job_id=state['job_id']
+                self.ai.bind_budget(self.store,frozen,state)
+                self.complete_essay_batch(state,frozen)
+                if os.getenv('GRADING_ENABLED')!='true' or review:
+                    report['staged']+=1
+                    continue
+                target=self.batch_publication_target(state,bindings)
+                if target is None:
+                    report['staged']+=1
+                    continue
+                student,spreadsheet,roster=target
+                deliver(state,frozen,student,self.dashboard,self.sheets,self.store,
+                    spreadsheet,self.drive,self.settings)
+                report['completed']+=1
+                if save_draft(frozen,roster,self.store):
+                    report['announcements_ready']=report.get('announcements_ready',0)+1
+            except BatchPending:
+                report['pending']+=1
+                state.pop('last_error',None)
+                self.store.save(state)
+            except Exception as exc:
+                report['errors'].append({'job':state['job_id'][:12],'error_type':type(exc).__name__})
+                state['last_error']={'type':type(exc).__name__,
+                    'reason':str(exc) if isinstance(exc,ValueError) else 'Batch collection failed; preserve saved job'}
+                self.store.save(state)
+            finally:
+                # Rotate staged/disabled/error jobs as well as pending ones. Otherwise
+                # a full first page of private results can starve later paid jobs forever.
+                state['batch_collection_checked_at']=datetime.now(timezone.utc).isoformat()
+                self.store.save(state)
+        return report
 
     def run(self, bindings, limit=None):
         limit=limit or self.settings.max_jobs
@@ -269,9 +406,19 @@ class Pipeline:
                             self.store.save(existing)
                         state=self.store.begin(binding,student,source)
                         frozen=Binding.model_validate(state['binding'])
+                        if state.get('batch_essay_work'):
+                            target=self.batch_publication_target(state,bindings,roster)
+                            if target is None:
+                                raise ValueError('Frozen Batch has no unique eligible live assignment; results remain private')
+                            student,spreadsheet,_=target
                         self.grade(state,frozen)
                         deliver(state,frozen,student,self.dashboard,self.sheets,self.store,spreadsheet,self.drive,self.settings)
                         report['completed']+=1
+                    except BatchPending:
+                        report['pending']+=1
+                        if jid in self.store.jobs:
+                            self.store.jobs[jid].pop('last_error',None)
+                            self.store.save(self.store.jobs[jid])
                     except Exception as exc:
                         # Never print source text, URLs, credentials or exception request bodies.
                         report['errors'].append({'class':binding.class_name,'task':binding.task_code,'job':jid[:12],

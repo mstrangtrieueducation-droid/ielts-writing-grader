@@ -51,9 +51,12 @@ class ClassBudget:
         if exception is not None:
             authority=binding.regrade_authorizations.get(self.student_id,'')
             limits=exception.get('generation_limits',{'gemini-3.1-pro-preview':1})
+            plan=job.get('generation_plan',{})
+            pro_limit=len(binding.essays) if (plan.get('request_mode')=='per_essay_batch'
+                and plan.get('model')=='gemini-3.1-pro-preview' and plan.get('service_tier')=='batch') else 1
             if (not isinstance(limits,dict) or not limits
                 or any(model not in PRICES or type(count) is not int or count<1
-                       or count>(2 if model=='gemini-3.8-flash' else 1)
+                       or count>(2 if model=='gemini-3.8-flash' else pro_limit)
                        for model,count in limits.items())):
                 raise ValueError('Cost exception has invalid per-model generation limits')
             if (exception.get('scope')!=self.scope or exception.get('job_id')!=self.job_id
