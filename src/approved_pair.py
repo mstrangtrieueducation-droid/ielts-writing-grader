@@ -13,7 +13,8 @@ from .pro_batch import BatchPending
 
 def main():
     submit=sys.argv[1:]==['submit']
-    if not submit and sys.argv[1:]!=['collect']:raise ValueError('Explicit submit or collect required')
+    publish=sys.argv[1:]==['publish']
+    if not submit and not publish and sys.argv[1:]!=['collect']:raise ValueError('Explicit submit, collect or publish required')
     if os.getenv('GITHUB_ACTIONS')!='true':raise ValueError('Serialized workflow required')
     if submit and not all(os.getenv(k)=='true' for k in ('GRADING_ENABLED','GEMINI_GENERATION_ENABLED')):raise ValueError('Generation disabled')
     if not submit and os.getenv('GEMINI_GENERATION_ENABLED')!='false':raise ValueError('Read-only collector required')
@@ -28,6 +29,13 @@ def main():
         assert state['student']['id']==selected['student_id'] and state['trial_cost_ceiling_vnd']==5700
         assert state['cost_exception']['generation_limits']=={'gemini-3.1-pro-preview':2}
         assert state['cost_exception']['authority']==auth['authority']+' Student '+selected['student_id']
+        if publish:
+            from .teacher_publication import deliver_teacher_authorized
+            pipeline=Pipeline(settings,SheetService(creds),DriveService(creds),None,store,Dashboard(settings))
+            result=deliver_teacher_authorized(pipeline,[binding],{'class_name':binding.class_name,
+                'task_code':binding.task_code,'student_ids':[selected['student_id']]})
+            report.append({'student_id':selected['student_id'],**result})
+            continue
         if not submit and not state.get('batch_essay_work'):
             report.append({'student_id':selected['student_id'],'status':'not_submitted'});continue
         bounded=replace(settings,student_budget_vnd=selected['student_cumulative_ceiling_vnd'])
@@ -50,6 +58,7 @@ def main():
         calls=[c for c in ai.budget.data['calls'].values() if c['job_id']==state['job_id']] if ai.budget else []
         report.append({'student_id':selected['student_id'],'status':result,'requests_reserved':len(calls),
             'cost_or_reserve_vnd':sum(c.get('accounted_vnd',c['reserved_vnd']) for c in calls)})
-    owner.write_json(settings.state_folder,'approved-pair-v10-20261012-report.json',{'students':report})
-    print(json.dumps({'students':report,'publication':False}))
+    suffix='publication' if publish else 'report'
+    owner.write_json(settings.state_folder,f'approved-pair-v10-20261012-{suffix}.json',{'students':report})
+    print(json.dumps({'students':report,'publication':publish}))
 if __name__=='__main__':main()

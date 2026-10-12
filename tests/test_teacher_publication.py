@@ -83,3 +83,35 @@ def test_parent_portal_failure_does_not_mark_publication_complete(binding,settin
     assert s['teacher_publication'].get('status')!='published'
     assert s['teacher_publication']['tracker_evidence']['exact_readback']
     assert s['pilot_review']['status']=='rejected'
+
+
+def batch_setup(binding,settings):
+    from src.graders.essay_batch import PROMPT_VERSION,MODEL,_source_digest
+    from src.graders.quality_contract import CONTRACT_VERSION
+    p,b,s,selection=setup(binding,settings)
+    raw=s.pop('bundle_work')['result']['essays']
+    requests=[{'exercise':e.exercise,'prompt':'Frozen exact request',
+        'prompt_sha256':digest('Frozen exact request'),
+        'source_digest':digest(s['source']['essay_texts'][str(e.exercise)])} for e in b.essays]
+    s['batch_essay_work']={'mode':PROMPT_VERSION,'model':MODEL,'transport':'batch',
+        'quality_contract_version':CONTRACT_VERSION,'source_digest':_source_digest(b.essays,s['source']['essay_texts']),
+        'requests':requests,'status':'held','result':{str(e['exercise']):e for e in raw}}
+    s['teacher_publication_authorization']['raw_sha256']=payload_digest(s['batch_essay_work']['result'])
+    return p,b,s,selection
+
+
+def test_explicit_saved_batch_publication_preserves_raw_feedback_and_qa(binding,settings):
+    p,b,s,selection=batch_setup(binding,settings);before=copy.deepcopy(s['batch_essay_work'])
+    assert deliver_teacher_authorized(p,[b],selection)['essays']==2
+    assert s['batch_essay_work']==before and s['pilot_review']['status']=='rejected'
+
+
+@pytest.mark.parametrize('change',['response','prompt','mapping','both_transports'])
+def test_saved_batch_publication_is_bound_to_exact_raw_and_frozen_requests(binding,settings,change):
+    p,b,s,selection=batch_setup(binding,settings)
+    if change=='response':s['batch_essay_work']['result']['1']['summary_vi']='Changed'
+    if change=='prompt':s['batch_essay_work']['requests'][0]['prompt']='Changed'
+    if change=='mapping':s['batch_essay_work']['result']['1']['exercise']=2
+    if change=='both_transports':s['bundle_work']={'result':{'essays':[]}}
+    with pytest.raises(ValueError):deliver_teacher_authorized(p,[b],selection)
+    assert not p.dashboard.payloads and not p.sheets.blocks

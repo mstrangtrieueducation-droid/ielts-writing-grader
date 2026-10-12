@@ -5,7 +5,7 @@ retries, clears a notebook lock, or treats publication as quality acceptance.
 """
 import hashlib
 import os
-from .schemas import Binding, EssayResult, AuditedProEssayBundle, NotebookResult
+from .schemas import Binding, EssayResult, AuditedProEssayBundle, AuditedBundledEssayFeedback, NotebookResult
 from .parsers import word_count, essay_paragraphs, parse_receipt
 from .policy import eligible_binding, receipt_allowed, notebook_state, check_suppression
 from .pilot import payload_digest
@@ -13,15 +13,31 @@ from .graders.essay_grader import source_quote
 from .delivery import feedback_block
 
 
+def saved_raw(state):
+    if bool(state.get('bundle_work')) == bool(state.get('batch_essay_work')):
+        raise ValueError('Exactly one saved grading transport is required')
+    return (state.get('batch_essay_work') or state['bundle_work'])['result']
+
+
 def saved_essays(state):
     """Restore display-only schema; do not change grading prose or private QA."""
-    bundle=AuditedProEssayBundle.model_validate(state['bundle_work']['result'])
     binding=Binding.model_validate(state['binding'])
-    if sorted(e.exercise for e in bundle.essays)!=sorted(s.exercise for s in binding.essays):
+    raw=saved_raw(state)
+    if state.get('batch_essay_work'):
+        from .graders.essay_batch import _frozen_requests
+        _frozen_requests(state['batch_essay_work'],binding.essays,state['source']['essay_texts'])
+        if not isinstance(raw,dict) or set(raw)!={str(s.exercise) for s in binding.essays}:
+            raise ValueError('Saved Batch exercise mapping differs')
+        items=[AuditedBundledEssayFeedback.model_validate(raw[str(s.exercise)]) for s in binding.essays]
+        if any(item.exercise!=spec.exercise for item,spec in zip(items,binding.essays)):
+            raise ValueError('Saved Batch response mapping differs')
+    else:
+        items=AuditedProEssayBundle.model_validate(raw).essays
+    if sorted(e.exercise for e in items)!=sorted(s.exercise for s in binding.essays):
         raise ValueError('Saved bundle does not contain the exact assigned exercises')
     output=[]
     from .parsers import digest
-    for item in bundle.essays:
+    for item in items:
         original=state['source']['essay_texts'][str(item.exercise)]
         if item.source_digest!=digest(original):
             raise ValueError('Saved essay source identity differs')
@@ -42,7 +58,7 @@ def verify_authorization(state):
         or not approval.get('authorized_at') or not approval.get('quality_findings_acknowledged')
         or approval.get('job_id')!=state['job_id']
         or approval.get('student_id')!=state['student']['id']
-        or approval.get('raw_sha256')!=payload_digest(state['bundle_work']['result'])
+        or approval.get('raw_sha256')!=payload_digest(saved_raw(state))
         or approval.get('binding_sha256')!=payload_digest(state['binding'])
         or approval.get('source_sha256')!=payload_digest(state['source'])
         or approval.get('payload_sha256')!=payload_digest(publication.get('payload'))):
