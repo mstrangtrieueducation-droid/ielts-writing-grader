@@ -36,8 +36,10 @@ def main():
             work=state.get('batch_essay_work',{})
             if not submit and work.get('status')=='held' and 'result' not in work:
                 from .pro_batch_essays import reconcile_saved_metadata
+                from .graders.essay_batch import _frozen_requests
                 ai.job_id=state['job_id'];ai.bind_budget(store,binding,state)
-                recovered=reconcile_saved_metadata(ai,work['requests'])
+                requests=_frozen_requests(work,binding.essays,state['source']['essay_texts'])
+                recovered=reconcile_saved_metadata(ai,requests)
                 work['result']={k:v.model_dump(mode='json') for k,v in recovered.items()}
                 work['status']='received';store.save(state)
             pipeline.grade(state,binding)
