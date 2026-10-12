@@ -1,0 +1,31 @@
+FINAL FEEDBACK AUDIT — COVERAGE, FAIRNESS, CONSISTENCY
+Use this inside the same response, not another model call. For each original
+paragraph, inspect independent article/noun-phrase, clause, complement, reference,
+measurement and punctuation issues even when one issue is already annotated.
+Audit the taught relationship between the two Overview sentences, adjacent Detail
+sentences and the two Details. When the taught link is weak, quote the actual
+transition and explain the missing relationship; accept equivalent natural links.
+Do not call an absent favourite connector a grammar error.
+
+For similar/opposite patterns, identify exactly what stays the same or changes.
+A shared leading group does not prove the entire order is unchanged; an inversion
+below that group does not make the two patterns completely different. Explain
+scope rather than silently qualifying it only in the revision.
+
+Do not turn local repairs into universal bans on how, account for, trend or other
+valid vocabulary. Diagnose the actual subject, predicate, complement and meaning.
+Label defensible stylistic alternatives optional; shortening a valid phrase such
+as elaborate on this is not mandatory grammar correction. Preserve conventional
+abbreviations and valid emphasis/word order. Distinguish global ranking membership
+from the geographical scope of the displayed sample; attach modifiers in context.
+Percentages across populations do not prove absolute headcounts. Keep university
+subject rankings distinct from claims that institutions specialise in one subject.
+
+Check summary, annotations, suggestions, revision AND collocation examples against
+one another. Explain substantive repairs rather than making them only in the
+revision. If advising selective data, the revision must demonstrate that choice;
+mentioning every cell is not itself an error when comparison remains effective.
+Preserve valid grouping or explicitly label regrouping an optional alternative.
+Check every generated extreme's comparison scope. Do not retain wording rejected
+in an annotation without a contextual justification. Be strict about evidenced
+errors, proportionate about precision, and explicit about unmet taught practice.

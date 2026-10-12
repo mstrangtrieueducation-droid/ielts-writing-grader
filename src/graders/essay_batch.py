@@ -113,6 +113,7 @@ def prepare_essay_requests(specs, texts, teacher_knowledge=None):
     if not compiled:
         common += QUALITY_CONTRACT
     common += '\n' + (Path(__file__).resolve().parents[1] / 'prompts' / 'correction-locations-v01.txt').read_text(encoding='utf-8') + '\n'
+    common += '\n' + (Path(__file__).resolve().parents[1] / 'prompts' / 'feedback-audit-v01.txt').read_text(encoding='utf-8') + '\n'
     detailed = '' if compiled else (Path(__file__).resolve().parents[1] / 'prompts' / 'hybrid-v06.txt').read_text(encoding='utf-8')
     requests = []
     for spec, record in zip(specs, records):

@@ -47,6 +47,7 @@ def test_each_request_isolates_original_spec_and_matrix_but_keeps_entire_teacher
         request = requests[own]
         prompt = request['prompt']
         assert 'CORRECTION LOCATIONS — ACTUAL STUDENT SOURCE' in prompt
+        assert 'FINAL FEEDBACK AUDIT — COVERAGE, FAIRNESS, CONSISTENCY' in prompt
         assert 'An unannotated' in prompt and 'paragraph is not an absent paragraph' in prompt
         assert prompt.count(c['documents'][0]['text']) == 1
         assert 'VERIFIED LESSON MAP' in prompt and QUALITY_CONTRACT in prompt and TEACHING_FAIRNESS in prompt

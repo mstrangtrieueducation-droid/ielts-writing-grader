@@ -59,3 +59,11 @@ restart in each paragraph; a quote crossing sentences displays a range. Repeated
 quotes retain all matching locations. No annotation in a paragraph does not mean
 that paragraph is missing. Do not infer the student's layout from the four-paragraph
 suggested revision, or silently add paragraph breaks to the original.
+
+The 12 October review of all four IELTS48 W14 essays also adds
+`feedback-audit-v01.txt` to newly prepared independent Batch requests. It covers
+missed taught links, contextual modifier/measurement interpretation, optional
+style versus errors, and consistency across all returned fields. This is a
+single-response instruction, not permission for paid retries and not proof that
+semantic grading is now correct. Existing frozen attempts and published essays
+are preserved; their audit is recorded separately in private local evidence.
