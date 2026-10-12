@@ -1,0 +1,33 @@
+name: Authorized balanced IELTS48 trial
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        type: choice
+        options: [submit, collect]
+        default: collect
+        required: true
+permissions:
+  contents: read
+concurrency:
+  group: ielts-grading-single-writer
+  cancel-in-progress: false
+jobs:
+  trial:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      # Scope is the exact private teacher authorization, not the daily runner.
+      GRADING_ENABLED: ${{ inputs.action == 'submit' && 'true' || 'false' }}
+      GEMINI_GENERATION_ENABLED: ${{ inputs.action == 'submit' && 'true' || 'false' }}
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+      GOOGLE_STATE_OAUTH_JSON: ${{ secrets.GOOGLE_STATE_OAUTH_JSON }}
+      FOLDER_STATE_ID: ${{ vars.FOLDER_STATE_ID }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+      - run: pip install -r requirements.txt
+      - run: python -m src.balanced_trial ${{ inputs.action }}
