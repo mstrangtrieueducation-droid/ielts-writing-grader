@@ -5,7 +5,7 @@ retries, clears a notebook lock, or treats publication as quality acceptance.
 """
 import hashlib
 import os
-from .schemas import Binding, EssayResult, AuditedProEssayBundle, AuditedBundledEssayFeedback, NotebookResult
+from .schemas import Binding, EssayResult, AuditedProEssayBundle, AuditedBundledEssayFeedback, NotebookResult, AuditedEssayWithoutVocabulary, EssayWithoutVocabulary
 from .parsers import word_count, essay_paragraphs, parse_receipt
 from .policy import eligible_binding, receipt_allowed, notebook_state, check_suppression
 from .pilot import payload_digest
@@ -28,7 +28,9 @@ def saved_essays(state):
         _frozen_requests(state['batch_essay_work'],binding.essays,state['source']['essay_texts'])
         if not isinstance(raw,dict) or set(raw)!={str(s.exercise) for s in binding.essays}:
             raise ValueError('Saved Batch exercise mapping differs')
-        items=[AuditedBundledEssayFeedback.model_validate(raw[str(s.exercise)]) for s in binding.essays]
+        from .pro_batch_essays import response_schema
+        requests={r['exercise']:r for r in state['batch_essay_work']['requests']}
+        items=[response_schema(requests[s.exercise]).model_validate(raw[str(s.exercise)]) for s in binding.essays]
         if any(item.exercise!=spec.exercise for item,spec in zip(items,binding.essays)):
             raise ValueError('Saved Batch response mapping differs')
     else:
@@ -47,7 +49,8 @@ def saved_essays(state):
             c['original']=source_quote(c['original'],original)
         data.update(original=original,word_count=word_count(original),
             paragraph_count=len(essay_paragraphs(original)),band_scores={})
-        output.append(EssayResult.model_validate(data).model_dump(mode='json'))
+        schema=EssayWithoutVocabulary if isinstance(item,AuditedEssayWithoutVocabulary) else EssayResult
+        output.append(schema.model_validate(data).model_dump(mode='json'))
     return output
 
 

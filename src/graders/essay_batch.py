@@ -10,7 +10,8 @@ from types import SimpleNamespace
 
 from ..parsers import digest, essay_paragraphs, word_count
 from ..pro_batch import BatchPending
-from ..schemas import AuditedBundledEssayFeedback
+from ..schemas import AuditedBundledEssayFeedback, AuditedEssayWithoutVocabulary
+from ..pro_batch_essays import NO_VOCABULARY_MARKER
 from .essay_bundle import restore_bundle
 from .essay_grader import RUBRIC, LANGUAGE_AUDIT, NUMERICAL_AUDIT, language_units
 from .quality_contract import (CONTRACT_VERSION, QUALITY_CONTRACT, chart_guide,
@@ -115,6 +116,8 @@ def prepare_essay_requests(specs, texts, teacher_knowledge=None):
     common += '\n' + (Path(__file__).resolve().parents[1] / 'prompts' / 'correction-locations-v01.txt').read_text(encoding='utf-8') + '\n'
     common += '\n' + (Path(__file__).resolve().parents[1] / 'prompts' / 'feedback-audit-v01.txt').read_text(encoding='utf-8') + '\n'
     detailed = '' if compiled else (Path(__file__).resolve().parents[1] / 'prompts' / 'hybrid-v06.txt').read_text(encoding='utf-8')
+    if package and package.get('vocabulary_table') is False:
+        common += '\n'+NO_VOCABULARY_MARKER+': Teacher removed the vocabulary table. Return collocations=[]; generate no vocabulary list or example sentences. This overrides all earlier collocation extraction instructions. Still explain every vocabulary misuse in corrections and correct it in the revision.\n'
     requests = []
     for spec, record in zip(specs, records):
         key = str(spec.exercise)
@@ -158,12 +161,13 @@ def _frozen_requests(work, specs, texts):
     return [{key: r[key] for key in ('exercise', 'prompt', 'source_digest')} for r in requests]
 
 
-def _restore_results(raw, specs, texts):
+def _restore_results(raw, specs, texts, without_vocabulary=False):
     if not isinstance(raw, dict) or set(raw) != {str(s.exercise) for s in specs}:
         raise ValueError('Batch response mapping duplicates, omits or invents an exercise')
     items = []
     for spec in specs:
-        item = AuditedBundledEssayFeedback.model_validate(raw[str(spec.exercise)])
+        schema=AuditedEssayWithoutVocabulary if without_vocabulary else AuditedBundledEssayFeedback
+        item = schema.model_validate(raw[str(spec.exercise)])
         if item.exercise != spec.exercise:
             raise ValueError('Batch response exercise differs from request mapping')
         items.append(item)
@@ -219,7 +223,7 @@ def grade_essay_batch(ai, settings, specs, texts, checkpoint, pending=None, teac
             checkpoint(copy.deepcopy(work))
             raise
     try:
-        results = _restore_results(work['result'], specs, texts)
+        results = _restore_results(work['result'], specs, texts, all(NO_VOCABULARY_MARKER in r['prompt'] for r in requests))
     except Exception:
         work['status'] = 'held'
         checkpoint(copy.deepcopy(work))
@@ -240,7 +244,7 @@ def verify_saved_quality(state, binding):
     _frozen_requests(work, binding.essays, texts)
     if work.get('status') != 'validated':
         raise ValueError('Per-essay Batch quality checkpoint is absent or unresolved')
-    results = _restore_results(work.get('result'), binding.essays, texts)
+    results = _restore_results(work.get('result'), binding.essays, texts, all(NO_VOCABULARY_MARKER in r['prompt'] for r in work['requests']))
     expected = [r.model_dump(mode='json') for r in results]
     if expected != state.get('payload', {}).get('essays'):
         raise ValueError('Delivery differs from the source-grounded checked Batch result')

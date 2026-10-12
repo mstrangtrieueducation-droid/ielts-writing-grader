@@ -44,7 +44,7 @@
         for (const paragraph of essay.upgraded_paragraphs) {
           const p = el('p'); for (const span of paragraph) p.append(el('span', span.text, ['yellow','blue','green'].includes(span.color) ? span.color : '')); details.append(p);
         }
-        details.append(el('h3', 'Cụm từ cần ghi nhớ'));
+        if(essay.collocations.length) details.append(el('h3', 'Cụm từ cần ghi nhớ'));
         for (const entry of essay.collocations) details.append(el('p', `${entry.phrase} (${entry.type}): ${entry.meaning_vi}\n${entry.usage_example}`, 'prose'));
         card.append(details);
       }

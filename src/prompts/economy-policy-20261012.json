@@ -1,0 +1,31 @@
+{
+  "version": "economy-representative-v01",
+  "teacher_instruction_date": "2026-10-12",
+  "class_budget_vnd": 25000,
+  "notebook": {
+    "model": "gemini-3.8-flash",
+    "images_per_request": 5,
+    "max_output_tokens": 99,
+    "thinking": "minimal",
+    "media_resolution": "low",
+    "maximum_vnd_per_student": 70,
+    "unreadable_policy": "uncertain; no inferred missing pages"
+  },
+  "essays": {
+    "model": "gemini-3.1-pro-preview",
+    "transport": "batch",
+    "essays_per_request": 2,
+    "requests_per_student": 1,
+    "max_output_tokens": 800,
+    "thinking": "low",
+    "maximum_corrections_across_both_essays": 4,
+    "scores": "estimated band for each essay",
+    "full_revision": false,
+    "vocabulary_table": false,
+    "teacher_models_in_input": false,
+    "teacher_rules_and_verified_task_data_in_input": true
+  },
+  "generation_retry": false,
+  "status": "superseded_by_teacher_quality_priority_20261012",
+  "legacy_results": "preserve frozen detailed requests and existing results"
+}

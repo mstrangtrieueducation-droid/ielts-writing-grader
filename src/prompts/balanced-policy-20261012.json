@@ -1,0 +1,19 @@
+{
+  "version": "balanced-pair-v01",
+  "status": "prepared_requires_quality_trial",
+  "class_budget_vnd": 25000,
+  "pro_requests_per_student": 1,
+  "pro_output_limit_including_thinking": 5200,
+  "pro_thinking": "low",
+  "all_evidenced_corrections": true,
+  "full_revisions": true,
+  "vocabulary_table": false,
+  "private_repetitive_qa_tables": false,
+  "flash_tier": "batch",
+  "flash_output_limit": 400,
+  "flash_media_resolution": "high",
+  "teacher_notebook_reference_required": true,
+  "unclear_notebook": "hold_for_verification",
+  "paid_retry": false,
+  "generation_enabled": false
+}

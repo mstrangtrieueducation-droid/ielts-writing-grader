@@ -471,7 +471,7 @@ const ieltsWritingReviews_ = (() => {
       array(item.studentQuotes).map(quote => '<blockquote lang="en">' + escape(quote) + '</blockquote>').join('') + '</div></article>').join('') + '</div></details></section>';
   }
   function knowledgeHtml(record, knowledgeRows) {
-    if(record.savedModelResult) return '<section class="wr-section"><h3>Cụm từ cần ghi nhớ</h3><div class="wr-knowledge"><table><thead><tr><th>Cụm từ</th><th>Nghĩa</th><th>Ví dụ</th></tr></thead><tbody>'+array(record.collocations).map(c=>'<tr><td>'+inline(c.phrase)+'</td><td>'+inline(c.meaning_vi)+'</td><td>'+inline(c.usage_example)+'</td></tr>').join('')+'</tbody></table></div></section>'; 
+    if(record.savedModelResult) return '';
     if (record.taskType === 2) return '<section class="wr-section"><h3>Kiến thức đã được ghi chép và giảng kỹ</h3><div class="wr-task2-grid">' + array(record.task2.appliedKnowledge).map(item =>
       '<article class="wr-copy">' + prose(item.explanation) + '<blockquote lang="en">' + escape(item.revisionEvidence) + '</blockquote></article>').join('') + '</div></section>';
     return '<section class="wr-section"><h3>Kiến thức đã được ghi chép và giảng kỹ</h3><div class="wr-knowledge"><table><thead><tr><th scope="col">Kỹ thuật</th><th scope="col">Mức vận dụng</th><th scope="col">Bằng chứng</th></tr></thead><tbody>' + knowledgeRows.map(row => '<tr><td>' + inline(row.technique) + '</td><td>' + inline(row.application) + '</td><td>' + inline(row.evidence) + '</td></tr>').join('') + '</tbody></table></div></section>';

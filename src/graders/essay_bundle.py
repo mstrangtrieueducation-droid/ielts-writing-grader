@@ -5,7 +5,8 @@ No PDF/image transfer, paid reviewer, regeneration or manual feedback patching.
 import json
 from pathlib import Path
 from ..schemas import (ProEssayBundle,FlashEssayBundle,ThoroughFlashResult,ThoroughFlashTask1Result,
-    AuditedProEssayBundle,AuditedFlashEssayBundle,AuditedBundledEssayFeedback)
+    AuditedProEssayBundle,AuditedFlashEssayBundle,AuditedBundledEssayFeedback,
+    AuditedEssayWithoutVocabulary,ThoroughEssayWithoutVocabulary,ThoroughTask1WithoutVocabulary)
 from ..parsers import word_count,essay_paragraphs,digest
 from ..pro_batch import BatchPending
 from .essay_grader import RUBRIC,LANGUAGE_AUDIT,NUMERICAL_AUDIT,language_units,validate_essay,source_quote
@@ -102,11 +103,11 @@ def restore_bundle(bundle, specs, texts, teaching_fairness=False):
         data.update(original=original,word_count=word_count(original),
             paragraph_count=len(essay_paragraphs(original)),band_scores={})
         if spec.task==1:
-            schema=ThoroughFlashTask1Result
+            schema=ThoroughTask1WithoutVocabulary if isinstance(item,AuditedEssayWithoutVocabulary) else ThoroughFlashTask1Result
         else:
             if data.pop('numeric_checks'):
                 raise ValueError('Task 2 must not acquire a Task 1 numerical audit')
-            schema=ThoroughFlashResult
+            schema=ThoroughEssayWithoutVocabulary if isinstance(item,AuditedEssayWithoutVocabulary) else ThoroughFlashResult
         output.append(validate_essay(schema.model_validate(data),original,spec))
     return output
 

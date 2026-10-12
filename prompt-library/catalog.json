@@ -2,8 +2,8 @@
   "schema_version": 1,
   "packages": [
     {
-      "manifest": "B14-HOMEWORK-NOTREND/v11/manifest.json",
-      "manifest_sha256": "3423f101ccd869f700fd5c6627e485ae1f4ff7c5611c46289ba047ce5bb06ec6"
+      "manifest": "B14-HOMEWORK-NOTREND/v13/manifest.json",
+      "manifest_sha256": "cdf125620a025f32f119606b1a4d783e382853ec4eec673077cfe8597ae2c527"
     }
   ],
   "history": [
@@ -26,6 +26,14 @@
     {
       "manifest": "B14-HOMEWORK-NOTREND/v10/manifest.json",
       "manifest_sha256": "665c011234f0bbbb24b32dabecf8b7141758865058c7d487eac65e6c5f7d1cb5"
+    },
+    {
+      "manifest": "B14-HOMEWORK-NOTREND/v11/manifest.json",
+      "manifest_sha256": "3423f101ccd869f700fd5c6627e485ae1f4ff7c5611c46289ba047ce5bb06ec6"
+    },
+    {
+      "manifest": "B14-HOMEWORK-NOTREND/v12/manifest.json",
+      "manifest_sha256": "dc961b4ab66798fb94d9fd16ab7e3d28e8a24422dde2e25f245dc5c8830b7023"
     }
   ]
 }

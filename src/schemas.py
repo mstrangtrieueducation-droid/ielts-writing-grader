@@ -228,6 +228,18 @@ class AuditedBundledEssayFeedback(BundledEssayFeedback):
     numeric_evidence: list[NumericEvidence]
     generated_numbers: list[GeneratedNumericEvidence]
 
+class AuditedEssayWithoutVocabulary(AuditedBundledEssayFeedback):
+    collocations: list[Collocation] = Field(min_length=0, max_length=0)
+
+class EssayWithoutVocabulary(EssayResult):
+    collocations: list[Collocation] = Field(min_length=0, max_length=0)
+
+class ThoroughEssayWithoutVocabulary(ThoroughFlashResult):
+    collocations: list[Collocation] = Field(min_length=0, max_length=0)
+
+class ThoroughTask1WithoutVocabulary(ThoroughFlashTask1Result):
+    collocations: list[Collocation] = Field(min_length=0, max_length=0)
+
 class AuditedProEssayBundle(ProEssayBundle):
     # New attempts only. Legacy schemas/checkpoints are immutable and remain readable.
     essays: list[AuditedBundledEssayFeedback] = Field(min_length=2, max_length=2)

@@ -14,11 +14,15 @@ from google.genai import types
 from .cost_control import cost_vnd
 from .parsers import digest
 from .pro_batch import BatchPending, MODEL, TERMINAL, now, job_state, exact_model
-from .schemas import AuditedBundledEssayFeedback
+from .schemas import AuditedBundledEssayFeedback, AuditedEssayWithoutVocabulary
 
 TRANSPORT = 'pro-per-essay-file-batch-v1'
 MAX_OUTPUT = 16384
 SCHEMA = AuditedBundledEssayFeedback
+NO_VOCABULARY_MARKER = 'NO_VOCABULARY_TABLE_V1'
+
+def response_schema(item):
+    return AuditedEssayWithoutVocabulary if NO_VOCABULARY_MARKER in item['prompt'] else SCHEMA
 
 
 def generation_allowed():
@@ -53,7 +57,7 @@ def plan(ai, requests):
         fingerprint = digest(json.dumps({
             'transport': TRANSPORT, 'job_id': ai.budget.job_id, 'exercise': item['exercise'],
             'source_digest': item['source_digest'], 'prompt': item['prompt'],
-            'system': ai.trusted_system, 'schema': SCHEMA.model_json_schema(),
+            'system': ai.trusted_system, 'schema': response_schema(item).model_json_schema(),
             'model': MODEL, 'output_limit': MAX_OUTPUT, 'thinking': 'medium'}, sort_keys=True))
         entries.append(dict(item, key=ai.budget.key(fingerprint)))
     entries.sort(key=lambda item: item['exercise'])
@@ -70,7 +74,7 @@ def count_plan(ai, entries):
     for item in entries:
         counted = ai.client.models.count_tokens(model=MODEL, contents=[
             item['prompt'], ai.trusted_system,
-            json.dumps(SCHEMA.model_json_schema(), ensure_ascii=False)])
+            json.dumps(response_schema(item).model_json_schema(), ensure_ascii=False)])
         if counted.total_tokens is None:
             raise ValueError('Cannot count complete essay Batch input; submission held')
         counts[item['key']] = counted.total_tokens
@@ -98,12 +102,11 @@ def preflight(ai, requests):
 def jsonl(entries, system):
     config = {'temperature': 0.1, 'maxOutputTokens': MAX_OUTPUT,
               'responseMimeType': 'application/json',
-              'responseJsonSchema': SCHEMA.model_json_schema(),
               'thinkingConfig': {'thinkingLevel': 'medium'}}
     return ''.join(json.dumps({'key': item['key'], 'request': {
         'contents': [{'role': 'user', 'parts': [{'text': item['prompt']}]}],
         'systemInstruction': {'parts': [{'text': system}]},
-        'generationConfig': config}}, ensure_ascii=False) + '\n' for item in entries)
+            'generationConfig': {**config,'responseJsonSchema':response_schema(item).model_json_schema()}}}, ensure_ascii=False) + '\n' for item in entries)
 
 
 def failure(exc):
@@ -214,7 +217,7 @@ def saved_results(ai, batch, entries):
         call = ai.budget.data['calls'][item['key']]
         if call.get('status') != 'received' or call.get('tier_unverified') or call.get('validation_hold'):
             raise ValueError('Saved essay Batch item is held; no automatic paid retry')
-        parsed = SCHEMA.model_validate_json(call['response_text'] or '')
+        parsed = response_schema(item).model_validate_json(call['response_text'] or '')
         if parsed.exercise != item['exercise'] or parsed.source_digest != item['source_digest']:
             raise ValueError('Saved essay Batch source identity differs')
         output[str(item['exercise'])] = parsed
@@ -308,10 +311,10 @@ def collect_output(ai, batch, entries, raw, terminal_error=None):
             if (len(response.candidates or []) != 1
                     or getattr(response.candidates[0].finish_reason, 'name', None) != 'STOP'):
                 raise ValueError('incomplete_provider_response')
-            parsed = SCHEMA.model_validate_json(text)
+            parsed = response_schema(item).model_validate_json(text)
             if parsed.exercise != item['exercise'] or parsed.source_digest != item['source_digest']:
                 raise ValueError('source_identity_mismatch')
-            call['validated_schema'] = SCHEMA.__name__
+            call['validated_schema'] = response_schema(item).__name__
             call.pop('validation_hold', None)
         except Exception as exc:
             # Raw provider error/result is already private. Public logs get no essay text.

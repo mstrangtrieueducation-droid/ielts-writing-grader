@@ -32,6 +32,7 @@ def test_saved_review_anchors_revision_refresh_and_identity():
         assert page.evaluate("ieltsHybridReviews_.sectionLabel('Unit 11')")==''
         assert page.evaluate("ieltsHybridReviews_.sectionLabel('Overview')")=='Overview'
         assert page.locator('#wr-original .wr-essay').text_content()==page.evaluate('essay.original')
+        assert page.get_by_role('heading',name='Cụm từ cần ghi nhớ',exact=True).count()==0
         assert page.locator('#wr-original img').count()==0
         page.locator('[data-wr-notes]').click()
         assert page.locator('#wr-note-0').get_attribute('class').endswith('is-selected')
