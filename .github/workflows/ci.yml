@@ -1,7 +1,7 @@
 name: Verify grader
 on:
   push:
-    paths: ['src/**', 'tests/**', 'requirements.txt', 'dashboard.js', 'parent-bridge.js', 'index.html', '.github/workflows/**']
+    paths: ['src/**', 'tests/**', 'requirements.txt', 'dashboard.js', 'parent-bridge.js', 'index.html', 'review-ui/**', '.github/workflows/**']
   pull_request:
 permissions:
   contents: read

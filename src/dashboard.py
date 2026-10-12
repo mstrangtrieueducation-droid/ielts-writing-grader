@@ -128,8 +128,14 @@ class Dashboard:
                 if '【KẾT QUẢ CHẤM' in target.inner_text():raise ValueError('Internal tracker markers exposed')
                 for essay in payload['essays'] if payload['state']=='graded' else []:
                     detail=target.locator(f'[data-hybrid-essay="{essay["exercise"]}"]')
-                    detail.locator('summary').click()
-                    if essay['original'] not in detail.inner_text():raise ValueError('Parent original essay differs')
+                    if detail.locator('[data-wr-open]').count():
+                        detail.locator('[data-wr-open]').click()
+                        if page.locator('#wr-original .wr-essay').text_content()!=essay['original']:
+                            raise ValueError('Parent original essay differs')
+                        page.locator('[data-wr-close]').click()
+                    else:
+                        detail.locator('summary').click()
+                        if essay['original'] not in detail.inner_text():raise ValueError('Parent original essay differs')
                 return {'live_parent_ui_verified':True,'identity_verified':True,'essays_verified':expected}
             finally:browser.close()
 

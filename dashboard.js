@@ -6,6 +6,11 @@
     if (data.schema_version !== 1 || !data.assignments) throw new Error('Invalid schema');
     const root = document.getElementById('results');
     root.replaceChildren();
+    const identity=Object.values(data.assignments)[0];
+    if(!identity || Object.values(data.assignments).some(p=>p.student_id!==identity.student_id || p.class_name!==identity.class_name || p.student_name!==identity.student_name))throw Error('Mixed identity');
+    Object.assign(parentState,{authorized:true,locked:false,name:identity.student_name,revision:'saved-profile'});
+    ieltsParentAccess.className=identity.class_name;
+    state.student={name:identity.student_name};state.dashboard={className:identity.class_name};
     for (const payload of Object.values(data.assignments)) {
       const card = el('article'); card.dataset.taskCode = payload.task_code;
       const title = {homework:'Nhận xét bài tập về nhà',assessment:'Nhận xét bài kiểm tra',notebook:'Nhận xét vở chép',vocabulary:'Nhận xét sổ từ vựng'}[payload.assignment_type] || 'Nhận xét bài tập';
@@ -20,6 +25,12 @@
       }
       // Suppression enforced independently in both producer and actual browser renderer.
       if (payload.state === 'graded') for (const essay of payload.essays || []) {
+        const matching=ieltsWritingAssignments_.all().some(a=>a.assignmentCode===payload.task_code&&a.tasks.some(t=>t.taskNumber===essay.exercise));
+        if(matching){
+          const holder=el('div');holder.dataset.essay=String(essay.exercise);
+          holder.innerHTML=ieltsWritingReviews_.savedResultCard(ieltsHybridReviews_.reviewRecord(payload,essay));
+          card.append(holder);continue;
+        }
         const details = el('details'); details.dataset.essay = String(essay.exercise);
         details.append(el('summary', `Đề ${essay.exercise} · ${essay.status} · ${essay.word_count} từ`));
         details.append(el('p', essay.summary_vi, 'prose'), el('p', essay.taught_application_vi, 'prose'));

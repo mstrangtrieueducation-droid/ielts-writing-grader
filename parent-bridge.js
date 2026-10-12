@@ -29,7 +29,26 @@ const ieltsHybridReviews_ = (() => {
     for(const e of p.essays){if(!Number.isInteger(e.exercise)||seen.has(e.exercise)||typeof e.original!=='string'||!Array.isArray(e.corrections)||!Array.isArray(e.upgraded_paragraphs)||!Array.isArray(e.collocations))throw Error('Invalid essay');seen.add(e.exercise);}
     return p;
   }
-  function essayHtml(e){
+  function reviewRecord(p,e){
+    const paragraphs=e.upgraded_paragraphs.map(p=>p.map(s=>s.text).join(''));
+    const annotations=e.corrections.map((c,i)=>{
+      const anchors=[];let at=e.original.indexOf(c.original);
+      while(c.original && at>=0){anchors.push({start:at,end:at+c.original.length,quote:c.original});at=e.original.indexOf(c.original,at+c.original.length);}
+      return {id:'C'+String(i+1).padStart(2,'0'),label:'C'+String(i+1).padStart(2,'0'),title:c.section,
+        bodyMarkdown:c.error+'\n\n**Cách sửa:** '+c.suggested,anchors};
+    });
+    return {schemaVersion:1,savedModelResult:true,resultId:'saved-'+p.task_code+'-'+p.student_id+'-'+e.exercise+'-'+p.graded_at,
+      className:p.class_name,studentName:p.student_name,assignmentCode:p.task_code,taskNumber:e.exercise,
+      originalEssay:e.original,originalWordCount:e.word_count,overall:e.summary_vi,learningVerdict:e.status,
+      submittedAt:p.received_at,publication:{state:'published',publishedAt:p.graded_at},annotations,
+      suggestedRevision:paragraphs.join('\n\n'),suggestedRevisionParagraphs:paragraphs,
+      suggestedRevisionWordCount:paragraphs.join(' ').trim().split(/\s+/).length,
+      dataGrouping:e.taught_application_vi,appliedKnowledge:[e.taught_application_vi],collocations:e.collocations};
+  }
+  function essayHtml(e,p){
+    if(typeof ieltsWritingReviews_!=='undefined' && ieltsWritingReviews_.savedResultCard){
+      return '<div data-hybrid-essay="'+e.exercise+'">'+ieltsWritingReviews_.savedResultCard(reviewRecord(p,e))+'</div>';
+    }
     return '<details class="hy-essay" data-hybrid-essay="'+e.exercise+'"><summary>Đề '+e.exercise+' · '+esc(e.status)+' · Xem bài chữa</summary><div class="hy-essay-body">'+
       '<h4>Nhận xét bài viết</h4>'+prose(e.summary_vi)+prose(e.taught_application_vi)+
       '<h4>Bài em đã nộp · '+esc(e.word_count)+' từ</h4>'+prose(e.original)+
@@ -41,7 +60,7 @@ const ieltsHybridReviews_ = (() => {
     const header='<header class="hy-head"><h3>Nhận xét bài tập về nhà</h3><p>Buổi '+esc(p.lesson)+(p.state==='graded'?' · Đã trả '+p.essays.length+' bài chữa':'')+'</p></header>';
     const links=(p.notebook_links||[]).filter(u=>/^https:\/\/drive\.google\.com\/file\/d\/[A-Za-z0-9_-]+\/view$/.test(u)).map((u,i)=>'<a class="wr-button secondary" href="'+esc(u)+'" target="_blank" rel="noopener noreferrer">Mở vở đã nộp'+(i?' '+(i+1):'')+'</a>').join(' ');
     if(p.state!=='graded')return header+'<div class="hy-content" role="status">'+prose(p.warning)+prose(p.received_display?'Thời gian nhận: '+p.received_display:'')+links+'</div>';
-    return header+'<div class="hy-content"><section class="hy-notebook"><strong>VỞ ĐÃ ĐẠT YÊU CẦU</strong><details><summary>Xem nhận xét và vở đã nộp</summary>'+prose(p.warning)+links+'</details></section>'+p.essays.map(essayHtml).join('')+'</div>';
+    return header+'<div class="hy-content"><section class="hy-notebook"><strong>VỞ ĐÃ ĐẠT YÊU CẦU</strong><details><summary>Xem nhận xét và vở đã nộp</summary>'+prose(p.warning)+links+'</details></section>'+p.essays.map(e=>essayHtml(e,p)).join('')+'</div>';
   }
   function mount(key){
     const entry=cache.get(key);if(!entry||entry.identity!==identity())return;
@@ -94,5 +113,5 @@ const ieltsHybridReviews_ = (() => {
     return template.innerHTML+'<section class="hy-result" data-hybrid-result="'+esc(key)+'"'+(ready?' data-hybrid-state="ready" data-hybrid-payload="'+esc(JSON.stringify(saved.payload))+'"':'')+' aria-label="Nhận xét bài tập về nhà">'+result.innerHTML+'</section>';
   }
   window.addEventListener('hashchange',clear);window.addEventListener('pagehide',clear);
-  return {fragment,clear};
+  return {fragment,clear,reviewRecord};
 })();

@@ -20,7 +20,8 @@ def main():
     root=Path(__file__).resolve().parents[1]
     with tempfile.TemporaryDirectory() as folder:
         target=Path(folder)
-        for name in ('index.html','dashboard.js'): shutil.copy2(root/name,target/name)
+        for name in ('index.html','dashboard.js','parent-bridge.js'): shutil.copy2(root/name,target/name)
+        shutil.copytree(root/'review-ui',target/'review-ui')
         class SilentHandler(http.server.SimpleHTTPRequestHandler):
             def log_message(self,*args): pass
         server=http.server.ThreadingHTTPServer(('127.0.0.1',0),functools.partial(SilentHandler,directory=folder))
