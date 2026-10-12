@@ -27,7 +27,9 @@ def main(action):
     if trial['new_ceiling_vnd']!=25000 or trial['authorized_students']!=['25','4'] or not trial.get('teacher_authorization'):
         raise ValueError('Wrong trial scope')
     if trial['class_plan_reserve_vnd']>25000:raise ValueError('Class plan exceeds authorization')
-    rows=trial['pilot_requests'];content=''.join(json.dumps(r,ensure_ascii=False)+'\n' for r in rows)
+    rows=trial['pilot_requests'];content=trial.get('pilot_requests_jsonl') or ''.join(json.dumps(r,ensure_ascii=False)+'\n' for r in rows)
+    if [json.loads(line) for line in content.splitlines() if line.strip()]!=rows:
+        raise ValueError('Frozen JSONL differs from authorization')
     if digest(content)!=trial['pilot_requests_sha256']:raise ValueError('Frozen request changed')
     for r in rows:
         if r['request']['generationConfig']['maxOutputTokens']!=5200:raise ValueError('Output cap changed')

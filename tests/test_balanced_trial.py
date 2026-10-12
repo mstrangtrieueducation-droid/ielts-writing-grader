@@ -8,12 +8,12 @@ def test_scoped_submission_is_once_and_collection_cannot_generate(monkeypatch):
     rows=[{'key':'a','request':{'generationConfig':{'maxOutputTokens':5200}}}]
     content=''.join(json.dumps(r,ensure_ascii=False)+'\n' for r in rows)
     state={'new_ceiling_vnd':25000,'authorized_students':['25','4'],'teacher_authorization':'Explicit trial',
-           'class_plan_reserve_vnd':24559,'pilot_requests':rows,'pilot_requests_sha256':digest(content),
+           'class_plan_reserve_vnd':24559,'pilot_requests':rows,'pilot_requests_jsonl':content,'pilot_requests_sha256':digest(content),
            'pilot_costs':[{'reserved_vnd':1900}],'display_name':'private-trial'}
     saved=[];creates=[]
     class Owner:
         def folder_files(self,folder):return [{'name':trial.NAME,'id':'private'}]
-        def download(self,fid):return json.dumps(state).encode(),'application/json'
+        def download(self,fid):return json.dumps(state,sort_keys=True).encode(),'application/json'
         def write_json(self,folder,name,value):state.clear();state.update(copy.deepcopy(value));saved.append(copy.deepcopy(value))
     client=N(files=N(upload=lambda **kw:N(name='files/input')),
         batches=N(create=lambda **kw:(creates.append(kw) or N(name='batches/once')),
