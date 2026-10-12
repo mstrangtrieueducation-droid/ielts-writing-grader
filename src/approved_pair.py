@@ -33,6 +33,13 @@ def main():
         bounded=replace(settings,student_budget_vnd=selected['student_cumulative_ceiling_vnd'])
         ai=GeminiService(bounded);pipeline=Pipeline(bounded,SheetService(creds),DriveService(creds),ai,store,Dashboard(bounded))
         try:
+            work=state.get('batch_essay_work',{})
+            if not submit and work.get('status')=='held' and 'result' not in work:
+                from .pro_batch_essays import reconcile_saved_metadata
+                ai.job_id=state['job_id'];ai.bind_budget(store,binding,state)
+                recovered=reconcile_saved_metadata(ai,work['requests'])
+                work['result']={k:v.model_dump(mode='json') for k,v in recovered.items()}
+                work['status']='received';store.save(state)
             pipeline.grade(state,binding)
             result='staged'
         except BatchPending:result='pending'

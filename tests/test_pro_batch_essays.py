@@ -115,6 +115,39 @@ def succeed(saved, output, rows=None):
     return rows
 
 
+def test_batch_usage_execution_tier_is_compatible_and_preserved(binding, monkeypatch, tmp_path):
+    ai, requests, output, calls, saved, _, _ = setup(binding, monkeypatch, tmp_path)
+    with pytest.raises(BatchPending):request(ai, requests)
+    rows=succeed(saved, output)
+    for row in rows:row['response']['usageMetadata']['serviceTier']='SERVICE_TIER_STANDARD'
+    succeed(saved, output, rows)
+    monkeypatch.setenv('GEMINI_GENERATION_ENABLED','false')
+    result=request(ai, requests)
+    assert len(result)==2 and calls['create']==1
+    for call in ai.budget.data['calls'].values():
+        assert call['usage_metadata']['provider_service_tier']=='SERVICE_TIER_STANDARD'
+        assert call['service_tier']=='batch' and 'validation_hold' not in call
+
+
+def test_known_metadata_hold_reconciles_saved_bytes_without_provider_calls(binding, monkeypatch, tmp_path):
+    from src.pro_batch_essays import reconcile_saved_metadata
+    ai, requests, output, calls, saved, _, _ = setup(binding, monkeypatch, tmp_path)
+    with pytest.raises(BatchPending):request(ai, requests)
+    rows=succeed(saved, output)
+    for row in rows:row['response']['usageMetadata']['serviceTier']='SERVICE_TIER_STANDARD'
+    succeed(saved, output, rows)
+    request(ai, requests)
+    batch=next(iter(ai.budget.data['essay_batches'].values()))
+    batch['status']='received_hold';batch['errors']=[{'reason':'invalid_response_or_identity'}]
+    for call in ai.budget.data['calls'].values():call['validation_hold']='ValidationError'
+    before=dict(calls)
+    monkeypatch.setenv('GEMINI_GENERATION_ENABLED','false')
+    recovered=reconcile_saved_metadata(ai, requests)
+    assert len(recovered)==2 and calls==before
+    assert batch['metadata_reconciliation']['generation_calls']==0
+    assert batch['status']=='received'
+
+
 @pytest.mark.parametrize('flag', ['GITHUB_ACTIONS', 'GRADING_ENABLED', 'GEMINI_GENERATION_ENABLED'])
 def test_each_gate_prevents_new_requests(binding, monkeypatch, tmp_path, flag):
     ai, requests, _, calls, _, _, _ = setup(binding, monkeypatch, tmp_path)

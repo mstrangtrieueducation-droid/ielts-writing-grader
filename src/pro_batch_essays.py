@@ -221,6 +221,50 @@ def saved_results(ai, batch, entries):
     return output
 
 
+def parse_batch_response(raw):
+    # File API JSON can gain metadata before the SDK's strict response model.
+    # Preserve the exact provider row in the ledger; adapt this known metadata
+    # field only. Batch billing is bound to the accepted Batch job, not its
+    # internal execution tier (which Google can report as STANDARD).
+    import copy
+    adapted = copy.deepcopy(raw)
+    metadata = adapted.get('usageMetadata', adapted.get('usage_metadata', {}))
+    reported_tier = metadata.pop('serviceTier', metadata.pop('service_tier', None))
+    if reported_tier is not None and reported_tier not in (
+            'SERVICE_TIER_STANDARD', 'SERVICE_TIER_PRIORITY', 'SERVICE_TIER_FLEX',
+            'SERVICE_TIER_UNSPECIFIED'):
+        raise ValueError('Unknown provider usage service tier')
+    response = types.GenerateContentResponse.model_validate(adapted)
+    usage = response.usage_metadata.model_dump(mode='json') if response.usage_metadata else {}
+    if reported_tier is not None:
+        usage['provider_service_tier'] = reported_tier
+    return response, usage
+
+
+def reconcile_saved_metadata(ai, requests):
+    """Reparse exact saved bytes after SDK metadata compatibility repair; no API call."""
+    batch_key, entries = plan(ai, requests)
+    batch = ai.budget.data.get('essay_batches', {}).get(batch_key)
+    if not batch or batch['status'] != 'received_hold' or batch.get('provider_state') != 'JOB_STATE_SUCCEEDED':
+        raise ValueError('No completed saved Batch eligible for metadata reconciliation')
+    for item in entries:
+        call = ai.budget.data['calls'][item['key']]
+        rows = call.get('batch_output_items', [])
+        if call.get('validation_hold') != 'ValidationError' or len(rows) != 1:
+            raise ValueError('Saved failure is not the known metadata compatibility failure')
+        response = rows[0].get('response', {})
+        if 'serviceTier' not in response.get('usageMetadata', {}):
+            raise ValueError('Known extra provider metadata absent')
+        parse_batch_response(response)  # All strict response fields still checked.
+    data, _ = ai.budget.drive.download(batch['output_private_file'])
+    saved = json.loads(data)
+    if digest(saved['jsonl']) != saved['sha256'] or saved['sha256'] != batch['output_sha256']:
+        raise ValueError('Saved Batch output checksum differs')
+    batch['metadata_reconciliation'] = {'at': now(), 'original_errors': batch['errors'],
+        'output_sha256': saved['sha256'], 'generation_calls': 0}
+    return collect_output(ai, batch, entries, saved['jsonl'])
+
+
 def collect_output(ai, batch, entries, raw, terminal_error=None):
     budget = ai.budget
     # Preserve all bytes privately before parsing, including malformed/unknown keys.
@@ -258,8 +302,7 @@ def collect_output(ai, batch, entries, raw, terminal_error=None):
             batch['errors'].append({'exercise': item['exercise'], 'reason': reason})
             budget.save(); continue
         try:
-            response = types.GenerateContentResponse.model_validate(rows[0]['response'])
-            usage = response.usage_metadata.model_dump(mode='json') if response.usage_metadata else {}
+            response, usage = parse_batch_response(rows[0]['response'])
             text = response.text or ''
             budget.received(key, text, usage, 'batch')
             if (len(response.candidates or []) != 1
@@ -269,6 +312,7 @@ def collect_output(ai, batch, entries, raw, terminal_error=None):
             if parsed.exercise != item['exercise'] or parsed.source_digest != item['source_digest']:
                 raise ValueError('source_identity_mismatch')
             call['validated_schema'] = SCHEMA.__name__
+            call.pop('validation_hold', None)
         except Exception as exc:
             # Raw provider error/result is already private. Public logs get no essay text.
             call['validation_hold'] = type(exc).__name__
