@@ -1,0 +1,52 @@
+name: Approved two-student Pro Batch trial
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        type: choice
+        options: [submit, collect]
+        default: collect
+        required: true
+permissions:
+  contents: read
+concurrency:
+  group: ielts-grading-single-writer
+  cancel-in-progress: false
+jobs:
+  approved_pair:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+      GRADING_ENABLED: ${{ vars.GRADING_ENABLED || 'false' }}
+      GEMINI_GENERATION_ENABLED: ${{ inputs.action == 'collect' && 'false' || vars.GEMINI_GENERATION_ENABLED || 'false' }}
+      GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
+      GOOGLE_STATE_OAUTH_JSON: ${{ secrets.GOOGLE_STATE_OAUTH_JSON }}
+      DASHBOARD_MASTER_KEY: ${{ secrets.DASHBOARD_MASTER_KEY }}
+      FOLDER_INCOMING_SCAN_ID: ${{ vars.FOLDER_INCOMING_SCAN_ID }}
+      FOLDER_PROCESSED_SCAN_ID: ${{ vars.FOLDER_PROCESSED_SCAN_ID }}
+      FOLDER_STATE_ID: ${{ vars.FOLDER_STATE_ID }}
+      GUIDELINES_SPREADSHEET_ID: ${{ vars.GUIDELINES_SPREADSHEET_ID }}
+      GEMINI_NOTEBOOK_MODEL: ${{ vars.GEMINI_NOTEBOOK_MODEL }}
+      # Saved legacy jobs keep their frozen contract. New grade/collection runs
+      # cannot be redirected to Standard/Flex by stale repository variables.
+      GEMINI_ESSAY_MODEL: 'gemini-3.1-pro-preview'
+      GEMINI_ESSAY_BUNDLE: 'false'
+      GEMINI_ESSAY_SERVICE_TIER: 'batch'
+      GEMINI_STUDENT_BUDGET_VND: ${{ vars.GEMINI_STUDENT_BUDGET_VND || '1000' }}
+      DASHBOARD_BASE_URL: ${{ vars.DASHBOARD_BASE_URL }}
+      CLASS_SHEET_MAP_JSON: ${{ secrets.CLASS_SHEET_MAP_JSON }}
+      GRADING_DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+      MAX_JOBS_PER_RUN: '12'
+      GEMINI_RPM: '6'
+      GITHUB_TOKEN: ${{ github.token }}
+      GEMINI_ESSAY_REQUEST_MODE: per_essay_batch
+      GEMINI_PRO_MAX_OUTPUT_TOKENS: 16384
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+      - run: pip install -r requirements.txt
+      - run: python -m src.approved_pair ${{ inputs.action }}
