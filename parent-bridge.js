@@ -29,12 +29,21 @@ const ieltsHybridReviews_ = (() => {
     for(const e of p.essays){if(!Number.isInteger(e.exercise)||seen.has(e.exercise)||typeof e.original!=='string'||!Array.isArray(e.corrections)||!Array.isArray(e.upgraded_paragraphs)||!Array.isArray(e.collocations))throw Error('Invalid essay');seen.add(e.exercise);}
     return p;
   }
+  function sectionLabel(value){
+    const text=String(value||'').trim().toLowerCase();
+    const names={introduction:'Introduction',intro:'Introduction',overview:'Overview',conclusion:'Conclusion',body:'Body'};
+    if(names[text])return names[text];
+    const body=text.match(/^(?:detail|body)(?:\s+paragraph)?\s*(\d+)$/);
+    if(body)return (/^detail/.test(text)?'Detail ':'Body ')+Number(body[1]);
+    // Unit labels are model-internal segments, not dependable lesson/paragraph numbers.
+    return 'Trong bài viết';
+  }
   function reviewRecord(p,e){
     const paragraphs=e.upgraded_paragraphs.map(p=>p.map(s=>s.text).join(''));
     const annotations=e.corrections.map((c,i)=>{
       const anchors=[];let at=e.original.indexOf(c.original);
       while(c.original && at>=0){anchors.push({start:at,end:at+c.original.length,quote:c.original});at=e.original.indexOf(c.original,at+c.original.length);}
-      return {id:'C'+String(i+1).padStart(2,'0'),label:'C'+String(i+1).padStart(2,'0'),title:c.section,
+      return {id:'C'+String(i+1).padStart(2,'0'),label:'Lỗi '+(i+1),title:sectionLabel(c.section),
         bodyMarkdown:c.error+'\n\n**Cách sửa:** '+c.suggested,anchors};
     });
     return {schemaVersion:1,savedModelResult:true,resultId:'saved-'+p.task_code+'-'+p.student_id+'-'+e.exercise+'-'+p.graded_at,
@@ -52,7 +61,7 @@ const ieltsHybridReviews_ = (() => {
     return '<details class="hy-essay" data-hybrid-essay="'+e.exercise+'"><summary>Đề '+e.exercise+' · '+esc(e.status)+' · Xem bài chữa</summary><div class="hy-essay-body">'+
       '<h4>Nhận xét bài viết</h4>'+prose(e.summary_vi)+prose(e.taught_application_vi)+
       '<h4>Bài em đã nộp · '+esc(e.word_count)+' từ</h4>'+prose(e.original)+
-      '<h4>Chữa từng lỗi</h4>'+e.corrections.map(c=>'<blockquote><strong>'+inline(c.section)+'</strong>'+prose(c.original)+prose(c.error)+prose('Sửa: '+c.suggested)+'</blockquote>').join('')+
+        '<h4>Chữa từng lỗi</h4>'+e.corrections.map((c,i)=>'<blockquote><strong>Lỗi '+(i+1)+' · '+sectionLabel(c.section)+'</strong>'+prose(c.original)+prose(c.error)+prose('Sửa: '+c.suggested)+'</blockquote>').join('')+
       '<h4>Bài viết tham khảo sau khi sửa</h4>'+e.upgraded_paragraphs.map(p=>'<p class="hy-prose">'+p.map(s=>'<span class="hy-'+(['yellow','blue','green'].includes(s.color)?s.color:'plain')+'">'+esc(s.text)+'</span>').join('')+'</p>').join('')+
       '<h4>Cụm từ cần ghi nhớ</h4>'+e.collocations.map(c=>prose(c.phrase+' ('+c.type+'): '+c.meaning_vi+'\n'+c.usage_example)).join('')+'</div></details>';
   }
@@ -113,5 +122,5 @@ const ieltsHybridReviews_ = (() => {
     return template.innerHTML+'<section class="hy-result" data-hybrid-result="'+esc(key)+'"'+(ready?' data-hybrid-state="ready" data-hybrid-payload="'+esc(JSON.stringify(saved.payload))+'"':'')+' aria-label="Nhận xét bài tập về nhà">'+result.innerHTML+'</section>';
   }
   window.addEventListener('hashchange',clear);window.addEventListener('pagehide',clear);
-  return {fragment,clear,reviewRecord};
+  return {fragment,clear,reviewRecord,sectionLabel};
 })();

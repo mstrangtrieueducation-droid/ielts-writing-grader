@@ -27,6 +27,10 @@ def test_saved_review_anchors_revision_refresh_and_identity():
             document.querySelector('#results').innerHTML=ieltsWritingReviews_.savedResultCard(record);
         }""")
         page.locator('[data-wr-open]').click()
+        assert page.locator('#wr-note-0 h5').inner_text()=='Lỗi 1 · Body'
+        assert page.evaluate("ieltsHybridReviews_.sectionLabel('Detail 2')")=='Detail 2'
+        assert page.evaluate("ieltsHybridReviews_.sectionLabel('Unit 11')")=='Trong bài viết'
+        assert page.evaluate("ieltsHybridReviews_.sectionLabel('Overview')")=='Overview'
         assert page.locator('#wr-original .wr-essay').text_content()==page.evaluate('essay.original')
         assert page.locator('#wr-original img').count()==0
         page.locator('[data-wr-notes]').click()
