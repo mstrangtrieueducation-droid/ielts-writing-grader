@@ -36,6 +36,15 @@ def test_parent_bridge_identity_render_and_suppression():
         # An unrelated dashboard repaint must not flash the cached result back to loading.
         cached=page.evaluate("ieltsHybridReviews_.fragment({skill:'writing'},testLegacy)")
         assert 'data-hybrid-state="ready"' in cached and 'Đang mở bài chữa' not in cached
+        page.evaluate("document.body.innerHTML=ieltsHybridReviews_.fragment({skill:'writing'},testLegacy)")
+        assert page.locator('[data-hybrid-essay]').get_attribute('open') is not None
+        # A background refresh must keep the full result and the reader's open
+        # essay while its response is delayed, then keep it open after mounting.
+        page.evaluate("window.savedNow=Date.now;Date.now=()=>savedNow()+181000;window.releaseFetch=null;window.savedFetch=fetch;window.fetch=()=>new Promise(resolve=>releaseFetch=async()=>resolve(await savedFetch()));document.body.innerHTML=ieltsHybridReviews_.fragment({skill:'writing'},testLegacy)")
+        assert page.locator('[data-hybrid-essay]').get_attribute('open') is not None
+        assert 'Đang mở bài chữa' not in page.locator('body').inner_text()
+        page.evaluate("releaseFetch();Date.now=savedNow;window.fetch=savedFetch")
+        assert page.locator('[data-hybrid-essay]').get_attribute('open') is not None
         # Wrong identity fails closed even with a valid encrypted envelope/key.
         page.evaluate("ieltsHybridReviews_.clear(); testPayload.student_name='Other Student';document.body.innerHTML=ieltsHybridReviews_.fragment({skill:'writing'},testLegacy)")
         page.wait_for_selector('[data-hybrid-state=error]')

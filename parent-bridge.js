@@ -48,9 +48,12 @@ const ieltsHybridReviews_ = (() => {
     document.querySelectorAll('[data-hybrid-result]').forEach(node=>{
       if(node.dataset.hybridResult!==key)return;
       const version=entry.payload?'ready':entry.error?'error':'loading';
-      if(node.dataset.hybridState===version)return;
+      if(node.dataset.hybridState===version && (!entry.payload || node.dataset.hybridPayload===JSON.stringify(entry.payload)))return;
+      const expanded=[...node.querySelectorAll('details')].map((n,i)=>n.open?i:-1);
       node.dataset.hybridState=version;
       node.innerHTML=entry.payload?resultHtml(entry.payload):'<p role="status">'+(entry.error?'Chưa tải được bài chữa. Em có thể mở đường dẫn bên dưới hoặc tải lại trang.':'Đang mở bài chữa của em…')+'</p>';
+      if(entry.payload)node.dataset.hybridPayload=JSON.stringify(entry.payload);
+      node.querySelectorAll('details').forEach((n,i)=>{if(expanded.includes(i))n.open=true;});
       if(entry.error){const a=document.createElement('a');a.textContent='Mở bài chữa chi tiết';a.href=entry.ref.url;a.target='_blank';a.rel='noopener noreferrer';node.append(a);}
     });
   }
@@ -58,7 +61,8 @@ const ieltsHybridReviews_ = (() => {
     const key=ref.profile+'|'+ref.code,id=identity();
     let entry=cache.get(key);
     if(entry&&entry.identity===id&&Date.now()-entry.created<180000){setTimeout(()=>mount(key),0);return key;}
-    const started=epoch;entry={identity:id,ref,created:Date.now()};cache.set(key,entry);
+    const previous=entry?.identity===id?entry.payload:null;
+    const started=epoch;entry={identity:id,ref,created:Date.now(),payload:previous};cache.set(key,entry);
     (async()=>{
       const response=await fetch(ORIGIN+'/ielts-writing-grader/dashboard_data/'+ref.profile+'.json',{cache:'no-store',credentials:'omit',referrerPolicy:'no-referrer'});
       if(!response.ok)throw Error('Unavailable');const envelope=await response.json();
@@ -84,7 +88,10 @@ const ieltsHybridReviews_ = (() => {
     template.content.querySelectorAll('p > strong').forEach(node=>{if(node.textContent.trim().replace(/:$/,'')==='Nhận xét bài tập về nhà')node.textContent='Tình trạng nộp bài:';});
     const key=load(ref);
     const saved=cache.get(key),ready=saved&&saved.identity===identity()&&saved.payload;
-    return template.innerHTML+'<section class="hy-result" data-hybrid-result="'+esc(key)+'"'+(ready?' data-hybrid-state="ready"':'')+' aria-label="Nhận xét bài tập về nhà">'+(ready?resultHtml(saved.payload):'<p role="status">Đang mở bài chữa của em…</p>')+'</section>';
+    const existing=[...document.querySelectorAll('[data-hybrid-result]')].find(n=>n.dataset.hybridResult===key && n.dataset.hybridState==='ready');
+    const result=document.createElement('template');result.innerHTML=ready?resultHtml(saved.payload):'<p role="status">Đang mở bài chữa của em…</p>';
+    if(existing&&ready){const opened=[...existing.querySelectorAll('details')].map((n,i)=>n.open?i:-1);result.content.querySelectorAll('details').forEach((n,i)=>{if(opened.includes(i))n.open=true;});}
+    return template.innerHTML+'<section class="hy-result" data-hybrid-result="'+esc(key)+'"'+(ready?' data-hybrid-state="ready" data-hybrid-payload="'+esc(JSON.stringify(saved.payload))+'"':'')+' aria-label="Nhận xét bài tập về nhà">'+result.innerHTML+'</section>';
   }
   window.addEventListener('hashchange',clear);window.addEventListener('pagehide',clear);
   return {fragment,clear};
