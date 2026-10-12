@@ -47,3 +47,15 @@ The new shared bundle version checks punctuation, rating complements, respective
 and static-chart language. Explicit `data_kind=static` also blocks peak language in suggestions,
 the revision and collocation examples. None of these guards proves exhaustive semantic correctness:
 the real pilot still requires review against its actual originals and verified source data.
+
+Correction locations (12 October 2026): new independent Batch prompts include
+`correction-locations-v01.txt`. Frozen requests and returned grading text stay intact.
+The display numbers corrections separately within each essay as `Lỗi N`. Locations
+come from exact quote offsets in the unchanged original, never the model's `Unit`
+audit IDs. Task 1 paragraphs with a clearly identifiable introduction and overview
+use Introduction / Overview / Detail; two genuinely separate body paragraphs use
+Detail 1 / Detail 2. Otherwise use the actual paragraph number. Sentence numbers
+restart in each paragraph; a quote crossing sentences displays a range. Repeated
+quotes retain all matching locations. No annotation in a paragraph does not mean
+that paragraph is missing. Do not infer the student's layout from the four-paragraph
+suggested revision, or silently add paragraph breaks to the original.

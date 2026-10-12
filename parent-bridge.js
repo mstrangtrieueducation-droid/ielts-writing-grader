@@ -38,12 +38,43 @@ const ieltsHybridReviews_ = (() => {
     // Unit labels are model-internal segments, not dependable lesson/paragraph numbers.
     return '';
   }
+  function correctionLocation(p,e,c){
+    const source=e.original, paragraphs=[];
+    const separator=/\r?\n\s*\r?\n/.test(source)?/\r?\n\s*\r?\n/g:/\r?\n/g;
+    let start=0;
+    for(const match of source.matchAll(separator)){
+      if(source.slice(start,match.index).trim())paragraphs.push({start,end:match.index,text:source.slice(start,match.index)});
+      start=match.index+match[0].length;
+    }
+    if(source.slice(start).trim())paragraphs.push({start,end:source.length,text:source.slice(start)});
+    const task=typeof ieltsWritingAssignments_!=='undefined' && ieltsWritingAssignments_.all?.().find(a=>a.assignmentCode===p.task_code)?.tasks.find(t=>t.taskNumber===e.exercise);
+    const task1=Boolean(task && /\bTask\s*1\b/i.test(task.title));
+    const overview=paragraphs.map((r,i)=>/^\s*(?:overall\b|in summary\b|to summarise\b|to summarize\b)/i.test(r.text)?i:-1).filter(i=>i>=0);
+    const structured=task1 && paragraphs.length>=3 && overview.length===1 && overview[0]>0 && /^\s*(?:the|this)\b[\s\S]{0,80}\b(?:table|chart|graph|diagram|map|maps|charts|graphs)\b/i.test(paragraphs[0].text);
+    const body=structured?paragraphs.map((r,i)=>i).filter(i=>i!==0&&i!==overview[0]):[];
+    const name=i=>!structured?'Đoạn '+(i+1):i===0?'Introduction':i===overview[0]?'Overview':body.length===1?'Detail':'Detail '+(body.indexOf(i)+1);
+    const locations=[];
+    if(!c.original)return sectionLabel(c.section);
+    let at=source.indexOf(c.original);
+    while(at>=0){
+      paragraphs.forEach((r,i)=>{
+        if(at>=r.end || at+c.original.length<=r.start)return;
+        // Use real sentence boundaries, not model audit Unit numbers.
+        const segments=typeof Intl.Segmenter==='function'?[...new Intl.Segmenter('en',{granularity:'sentence'}).segment(r.text)].filter(s=>s.segment.trim()):[];
+        const hit=segments.map((s,n)=>at<r.start+s.index+s.segment.length&&at+c.original.length>r.start+s.index?n+1:0).filter(Boolean);
+        const suffix=hit.length?' · Câu '+(hit.length===1?hit[0]:hit[0]+'–'+hit[hit.length-1]):'';
+        locations.push(name(i)+suffix);
+      });
+      at=source.indexOf(c.original,at+c.original.length);
+    }
+    return [...new Set(locations)].join('; ') || sectionLabel(c.section);
+  }
   function reviewRecord(p,e){
     const paragraphs=e.upgraded_paragraphs.map(p=>p.map(s=>s.text).join(''));
     const annotations=e.corrections.map((c,i)=>{
       const anchors=[];let at=e.original.indexOf(c.original);
       while(c.original && at>=0){anchors.push({start:at,end:at+c.original.length,quote:c.original});at=e.original.indexOf(c.original,at+c.original.length);}
-      return {id:'C'+String(i+1).padStart(2,'0'),label:'Lỗi '+(i+1),title:sectionLabel(c.section),
+      return {id:'C'+String(i+1).padStart(2,'0'),label:'Lỗi '+(i+1),title:correctionLocation(p,e,c),
         bodyMarkdown:c.error+'\n\n**Cách sửa:** '+c.suggested,anchors};
     });
     return {schemaVersion:1,savedModelResult:true,resultId:'saved-'+p.task_code+'-'+p.student_id+'-'+e.exercise+'-'+p.graded_at,
@@ -61,7 +92,7 @@ const ieltsHybridReviews_ = (() => {
     return '<details class="hy-essay" data-hybrid-essay="'+e.exercise+'"><summary>Đề '+e.exercise+' · '+esc(e.status)+' · Xem bài chữa</summary><div class="hy-essay-body">'+
       '<h4>Nhận xét bài viết</h4>'+prose(e.summary_vi)+prose(e.taught_application_vi)+
       '<h4>Bài em đã nộp · '+esc(e.word_count)+' từ</h4>'+prose(e.original)+
-        '<h4>Chữa từng lỗi</h4>'+e.corrections.map((c,i)=>'<blockquote><strong>Lỗi '+(i+1)+(sectionLabel(c.section)?' · '+sectionLabel(c.section):'')+'</strong>'+prose(c.original)+prose(c.error)+prose('Sửa: '+c.suggested)+'</blockquote>').join('')+
+        '<h4>Chữa từng lỗi</h4>'+e.corrections.map((c,i)=>'<blockquote><strong>Lỗi '+(i+1)+(correctionLocation(p,e,c)?' · '+correctionLocation(p,e,c):'')+'</strong>'+prose(c.original)+prose(c.error)+prose('Sửa: '+c.suggested)+'</blockquote>').join('')+
       '<h4>Bài viết tham khảo sau khi sửa</h4>'+e.upgraded_paragraphs.map(p=>'<p class="hy-prose">'+p.map(s=>'<span class="hy-'+(['yellow','blue','green'].includes(s.color)?s.color:'plain')+'">'+esc(s.text)+'</span>').join('')+'</p>').join('')+
       '<h4>Cụm từ cần ghi nhớ</h4>'+e.collocations.map(c=>prose(c.phrase+' ('+c.type+'): '+c.meaning_vi+'\n'+c.usage_example)).join('')+'</div></details>';
   }
@@ -122,5 +153,5 @@ const ieltsHybridReviews_ = (() => {
     return template.innerHTML+'<section class="hy-result" data-hybrid-result="'+esc(key)+'"'+(ready?' data-hybrid-state="ready" data-hybrid-payload="'+esc(JSON.stringify(saved.payload))+'"':'')+' aria-label="Nhận xét bài tập về nhà">'+result.innerHTML+'</section>';
   }
   window.addEventListener('hashchange',clear);window.addEventListener('pagehide',clear);
-  return {fragment,clear,reviewRecord,sectionLabel};
+  return {fragment,clear,reviewRecord,sectionLabel,correctionLocation};
 })();

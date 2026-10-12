@@ -37,7 +37,7 @@
         if (Object.keys(essay.band_scores || {}).length) details.append(el('p', Object.entries(essay.band_scores).map(([name, value]) => `${name}: ${value}`).join(' · ')));
         details.append(el('h3', 'Bài viết đã nộp'), el('p', essay.original, 'prose'), el('h3', 'Chữa từng lỗi'));
         for (const [index, correction] of essay.corrections.entries()) {
-          const section=ieltsHybridReviews_.sectionLabel(correction.section);
+          const section=ieltsHybridReviews_.correctionLocation(payload,essay,correction);
           const block = el('blockquote'); block.append(el('strong', `Lỗi ${index+1}${section?' · '+section:''}`), el('p', correction.original, 'prose'), el('p', correction.error), el('p', `Sửa: ${correction.suggested}`, 'prose')); details.append(block);
         }
         details.append(el('h3', 'Bài viết tham khảo sau khi sửa'));

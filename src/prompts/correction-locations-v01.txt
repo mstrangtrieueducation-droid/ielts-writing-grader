@@ -1,0 +1,14 @@
+CORRECTION LOCATIONS — ACTUAL STUDENT SOURCE
+Audit the actual paragraph breaks in the supplied original, separately from the
+four-paragraph revision you produce. Do not claim the student has two Detail
+paragraphs just because the revised essay should have two. An unannotated
+paragraph is not an absent paragraph. If required paragraph separation is missing,
+explain that with the actual source evidence, without inventing a paragraph break.
+For Correction.section use the actual role: Introduction, Overview, Detail,
+Detail 1/Detail 2 only when those separate body paragraphs really exist, or
+Conclusion. For Task 2 use Body rather than Task 1 Overview/Detail labels. When
+the role is uncertain, use the actual paragraph number. Never put Unit, unit_id,
+internal checklist IDs, or a sentence-audit segment number in Correction.section.
+Keep unit_id exclusively in the private language_checks audit. Exact original
+quotes must locate every correction; the UI independently derives the displayed
+paragraph/sentence position from those quotes in the unchanged original.

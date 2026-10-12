@@ -27,7 +27,7 @@ def test_saved_review_anchors_revision_refresh_and_identity():
             document.querySelector('#results').innerHTML=ieltsWritingReviews_.savedResultCard(record);
         }""")
         page.locator('[data-wr-open]').click()
-        assert page.locator('#wr-note-0 h5').inner_text()=='Lỗi 1 · Body'
+        assert page.locator('#wr-note-0 h5').inner_text()=='Lỗi 1 · Đoạn 1 · Câu 1'
         assert page.evaluate("ieltsHybridReviews_.sectionLabel('Detail 2')")=='Detail 2'
         assert page.evaluate("ieltsHybridReviews_.sectionLabel('Unit 11')")==''
         assert page.evaluate("ieltsHybridReviews_.sectionLabel('Overview')")=='Overview'
@@ -49,7 +49,18 @@ def test_saved_review_anchors_revision_refresh_and_identity():
         page.locator('[data-wr-close]').click()
         page.evaluate("essay.corrections[0].section='Unit 11';payload.graded_at='2026-10-12T00:01:00Z';document.querySelector('#results').innerHTML=ieltsWritingReviews_.savedResultCard(ieltsHybridReviews_.reviewRecord(payload,essay))")
         page.locator('[data-wr-open]').click()
-        assert page.locator('#wr-note-0 h5').inner_text()=='Lỗi 1'
+        assert page.locator('#wr-note-0 h5').inner_text()=='Lỗi 1 · Đoạn 1 · Câu 1'
+        locations=page.evaluate("""()=>{
+            const source='The table shows figures.\\nOverall, A led. B followed.\\nTo elaborate, A had 10. B had 5. C had 4.\\nRegarding C, it had 3.';
+            const locate=(original,quote)=>ieltsHybridReviews_.correctionLocation(payload,{...essay,original},{section:'Unit 999',original:quote});
+            return [locate(source,'B followed.'),locate(source,'C had 4.'),locate(source,'Regarding C'),
+                locate(source.replace('\\nRegarding C',' Regarding C'),'Regarding C'),
+                locate('The table shows figures.\\nA had 10.\\nB had 5.','B had 5.'),
+                locate(source.replaceAll('\\n','\\n\\n'),'C had 4.'),
+                locate(source,'B had 5. C had 4.')];
+        }""")
+        assert locations==['Overview · Câu 2','Detail 1 · Câu 3','Detail 2 · Câu 1',
+                          'Detail · Câu 4','Đoạn 3 · Câu 1','Detail 1 · Câu 3','Detail 1 · Câu 2–3']
         page.evaluate('ieltsParentLock_()')
         assert page.locator('dialog').count()==0
         assert page.evaluate('ieltsWritingReviews_.savedResultCard(record)')==''
