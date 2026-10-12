@@ -29,7 +29,7 @@ def test_saved_review_anchors_revision_refresh_and_identity():
         page.locator('[data-wr-open]').click()
         assert page.locator('#wr-note-0 h5').inner_text()=='Lỗi 1 · Body'
         assert page.evaluate("ieltsHybridReviews_.sectionLabel('Detail 2')")=='Detail 2'
-        assert page.evaluate("ieltsHybridReviews_.sectionLabel('Unit 11')")=='Trong bài viết'
+        assert page.evaluate("ieltsHybridReviews_.sectionLabel('Unit 11')")==''
         assert page.evaluate("ieltsHybridReviews_.sectionLabel('Overview')")=='Overview'
         assert page.locator('#wr-original .wr-essay').text_content()==page.evaluate('essay.original')
         assert page.locator('#wr-original img').count()==0
@@ -46,6 +46,10 @@ def test_saved_review_anchors_revision_refresh_and_identity():
         assert page.locator('[data-wr-tab=revision]').get_attribute('aria-selected')=='true'
         assert not page.evaluate('Boolean(window.injected)')
         assert page.evaluate("ieltsWritingReviews_.savedResultCard({...record,studentName:'Another student'})")==''
+        page.locator('[data-wr-close]').click()
+        page.evaluate("essay.corrections[0].section='Unit 11';payload.graded_at='2026-10-12T00:01:00Z';document.querySelector('#results').innerHTML=ieltsWritingReviews_.savedResultCard(ieltsHybridReviews_.reviewRecord(payload,essay))")
+        page.locator('[data-wr-open]').click()
+        assert page.locator('#wr-note-0 h5').inner_text()=='Lỗi 1'
         page.evaluate('ieltsParentLock_()')
         assert page.locator('dialog').count()==0
         assert page.evaluate('ieltsWritingReviews_.savedResultCard(record)')==''

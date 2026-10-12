@@ -362,7 +362,7 @@ const ieltsWritingReviews_ = (() => {
     }).join('');
   }
   function notesHtml(record) {
-    return array(record.annotations).map((note,index) => '<article class="wr-note' + (note.severity === 'serious' ? ' is-serious' : '') + '" id="wr-note-' + index + '" tabindex="-1"><h5>' + escape(note.label || 'Chú thích ' + (index + 1)) + ' · ' + inline(note.title) + '</h5><div class="wr-copy">' + prose(note.bodyMarkdown) + '</div>' + (array(note.anchors).length ? '<button class="wr-note-jump" type="button" data-wr-back="' + index + '">Về đoạn được chú thích</button>' : '') + '</article>').join('');
+    return array(record.annotations).map((note,index) => '<article class="wr-note' + (note.severity === 'serious' ? ' is-serious' : '') + '" id="wr-note-' + index + '" tabindex="-1"><h5>' + escape(note.label || 'Chú thích ' + (index + 1)) + (note.title ? ' · ' + inline(note.title) : '') + '</h5><div class="wr-copy">' + prose(note.bodyMarkdown) + '</div>' + (array(note.anchors).length ? '<button class="wr-note-jump" type="button" data-wr-back="' + index + '">Về đoạn được chú thích</button>' : '') + '</article>').join('');
   }
   function revisionHtml(record) {
     const paragraphs = array(record.suggestedRevisionParagraphs).map(p => String(p ?? ''));

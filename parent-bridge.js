@@ -36,7 +36,7 @@ const ieltsHybridReviews_ = (() => {
     const body=text.match(/^(?:detail|body)(?:\s+paragraph)?\s*(\d+)$/);
     if(body)return (/^detail/.test(text)?'Detail ':'Body ')+Number(body[1]);
     // Unit labels are model-internal segments, not dependable lesson/paragraph numbers.
-    return 'Trong bài viết';
+    return '';
   }
   function reviewRecord(p,e){
     const paragraphs=e.upgraded_paragraphs.map(p=>p.map(s=>s.text).join(''));
@@ -61,7 +61,7 @@ const ieltsHybridReviews_ = (() => {
     return '<details class="hy-essay" data-hybrid-essay="'+e.exercise+'"><summary>Đề '+e.exercise+' · '+esc(e.status)+' · Xem bài chữa</summary><div class="hy-essay-body">'+
       '<h4>Nhận xét bài viết</h4>'+prose(e.summary_vi)+prose(e.taught_application_vi)+
       '<h4>Bài em đã nộp · '+esc(e.word_count)+' từ</h4>'+prose(e.original)+
-        '<h4>Chữa từng lỗi</h4>'+e.corrections.map((c,i)=>'<blockquote><strong>Lỗi '+(i+1)+' · '+sectionLabel(c.section)+'</strong>'+prose(c.original)+prose(c.error)+prose('Sửa: '+c.suggested)+'</blockquote>').join('')+
+        '<h4>Chữa từng lỗi</h4>'+e.corrections.map((c,i)=>'<blockquote><strong>Lỗi '+(i+1)+(sectionLabel(c.section)?' · '+sectionLabel(c.section):'')+'</strong>'+prose(c.original)+prose(c.error)+prose('Sửa: '+c.suggested)+'</blockquote>').join('')+
       '<h4>Bài viết tham khảo sau khi sửa</h4>'+e.upgraded_paragraphs.map(p=>'<p class="hy-prose">'+p.map(s=>'<span class="hy-'+(['yellow','blue','green'].includes(s.color)?s.color:'plain')+'">'+esc(s.text)+'</span>').join('')+'</p>').join('')+
       '<h4>Cụm từ cần ghi nhớ</h4>'+e.collocations.map(c=>prose(c.phrase+' ('+c.type+'): '+c.meaning_vi+'\n'+c.usage_example)).join('')+'</div></details>';
   }
