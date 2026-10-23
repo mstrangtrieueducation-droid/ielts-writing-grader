@@ -6,7 +6,8 @@ import uuid
 from pathlib import Path
 from .config import Settings
 from .schemas import Binding
-from .drive_service import DriveService, credentials, state_credentials
+from .drive_service import DriveService, credentials
+from .sheets_state import SheetsStateDrive
 from .sheet_service import SheetService
 from .gemini_service import GeminiService
 from .state import StateStore
@@ -41,11 +42,11 @@ def main(argv=None):
         raise ValueError('New per-essay Batch grading is disabled; no student sources read')
     creds=credentials(settings.service_account)
     sheets,drive,ai=SheetService(creds),DriveService(creds),GeminiService(settings)
-    state_drive=DriveService(state_credentials(settings.state_oauth)) if settings.state_oauth else drive
+    state_drive=SheetsStateDrive(sheets,drive,os.environ.get('IELTS_STATE_SPREADSHEET_ID',''),settings.state_folder)
     bindings=sheets.guidelines(settings.guidelines_id)
     ai.preflight([settings.notebook_model,settings.essay_model])
     # Verify all folders exist and are visible without mutation.
-    for client,folder in ((state_drive,settings.state_folder),(drive,settings.incoming_folder),(drive,settings.processed_folder)):
+    for client,folder in ((drive,settings.incoming_folder),(drive,settings.processed_folder)):
         if client.metadata(folder)['mimeType']!='application/vnd.google-apps.folder':
             raise ValueError('Configured Drive folder ID is not a folder')
     state_drive.assert_private_folder(settings.state_folder)
